@@ -1,0 +1,75 @@
+/* Global Reset */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  overflow: hidden;
+}
+
+/* App Container */
+.app-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+/* Sidebar takes fixed width */
+app-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+}
+
+/* Chat area takes remaining space */
+app-chat-area {
+  flex: 1;
+  overflow: hidden;
+}
+/* Global Reset */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100vh;
+  overflow: hidden; /* Add this */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  overflow: hidden;
+}
+
+/* App Container */
+.app-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  position: fixed; /* Add this */
+  top: 0;
+  left: 0;
+}
+
+/* Sidebar takes fixed width */
+app-sidebar {
+  width: 360px;
+  flex-shrink: 0;
+  height: 100vh; /* Add this */
+  overflow-y: auto; /* Add this if sidebar needs scroll */
+}
+
+/* Chat area takes remaining space */
+app-chat-area {
+  flex: 1;
+  overflow: hidden;
+  height: 100vh; /* Add this */
+  display: flex; /* Add this */
+}

@@ -1,0 +1,358 @@
+
+/* --- SEARCH INPUT --- */
+.search-input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 6px;
+  border: none;
+  margin-bottom: 15px;
+  font-size: 15px;
+  box-sizing: border-box;
+  background-color: #A4C8E1; /* light blue */
+  color: #0D3B66; /* navy blue */
+}
+.model-switcher {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 0;
+  border-bottom: 1px solid #dcdcdc;
+  margin-bottom: 10px;
+}
+
+.model-btn {
+  width: 100%;
+  padding: 10px;
+  background: #e5e5e5;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  font-weight: 500;
+  
+}
+
+.model-btn.active {
+  background: #1F4E79;
+  color: white;
+}
+
+.search-input::placeholder {
+  color: #1F4E79; /* dark blue */
+}
+
+/* --- NEW CHAT BUTTON --- */
+.new-chat-btn {
+  width: 100%;
+  padding: 12px;
+  background-color: #3B7A99; /* medium blue */
+  color: white;
+  font-size: 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-bottom: 20px;
+}
+
+.new-chat-btn:hover {
+  background-color: #6FA3D8; /* sky blue hover */
+}
+
+/* --- CHAT LIST --- */
+.chat-list {
+  flex-grow: 1;
+  overflow-y: auto;
+}
+
+.chat-item {
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+  background-color: #A4C8E1; /* light blue */
+  color: #0D3B66;            /* navy blue text */
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.chat-item:hover {
+  background-color: #6FA3D8;
+  color: white;
+}
+
+/* Chat name takes all available space */
+.chat-name {
+  flex: 1;
+}
+
+/* --- DELETE BUTTON --- */
+.delete-btn {
+  margin-left: 10px;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: 0.2s;
+  color:black; /* palette red */
+}
+
+.delete-btn:hover {
+  opacity: 1;
+  transform: scale(1.2);
+  color: black;
+}
+
+/* --- RENAME BUTTON --- */
+.rename-btn {
+  margin-left: 10px;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: 0.2s;
+  color: #3B7A99; /* medium blue */
+}
+
+.rename-btn:hover {
+  opacity: 1;
+  transform: scale(1.2);
+  color: #6FA3D8; /* sky blue hover */
+}
+
+/* --- BOTTOM SECTION --- */
+.bottom {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.setting-item {
+  padding: 12px;
+  text-align: center;
+  background-color: #3B7A99;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.setting-item:hover {
+  background-color: #6FA3D8;
+}
+.sidebar {
+  width: 360px;
+  height: 100vh;
+  background-color: white; 
+  padding: 20px 15px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.new-chat-btn {
+  width: 100%;
+  padding: 12px;
+  background-color: #3B7A99;
+  color: white;
+  font-size: 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-bottom: 15px;
+}
+
+.new-chat-btn:hover {
+  background-color: #6FA3D8;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 6px;
+  border: none;
+  margin-bottom: 15px;
+  font-size: 15px;
+  box-sizing: border-box;
+  background-color: #A4C8E1;
+  color: #0D3B66;
+}
+
+.search-input::placeholder {
+  color: #1F4E79;
+}
+
+.chat-list {
+  flex-grow: 1;
+  overflow-y: auto;
+}
+
+.chat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #A4C8E1;
+  color: #0D3B66;
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+}
+
+.chat-item:hover {
+  background-color: #6FA3D8;
+  color: white;
+}
+
+.chat-name-wrapper {
+  flex: 1;
+}
+
+.rename-input {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: none;
+  font-size: 15px;
+}
+
+.chat-icons {
+  display: flex;
+  gap: 8px;
+}
+
+.icon-btn {
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-size: 16px;
+  padding: 2px;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+.icon-btn:hover {
+  transform: scale(1.2);
+  opacity: 1;
+}
+
+.delete-btn {
+  color: red;
+}
+
+.delete-btn:hover {
+  color: darkred;
+}
+
+.rename-btn {
+  color: #0D3B66; /* navy blue */
+}
+
+.bottom {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.setting-item {
+  padding: 12px;
+  text-align: center;
+  background-color: #3B7A99;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.setting-item:hover {
+  background-color: #6FA3D8;
+}
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-top: 1px solid #ccc; /* optional separation line */
+}
+
+.user-avatar {
+  width: 40px; /* slightly bigger */
+  height: 40px;
+  background-color: #000; /* black circle */
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: bold;
+  font-size: 16px; /* bigger initials */
+}
+
+.user-name {
+  font-weight: bold;
+  font-size: 16px;
+  color: #000; /* black for better visibility */
+}
+/* Bottom Section User Menu */
+.user-info {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 10px;
+}
+
+.user-avatar {
+  background-color: #000;
+  color: #fff;
+  width: 35px;
+  height: 35px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: bold;
+  margin-right: 10px;
+}
+
+.user-name {
+  font-weight: bold;
+  font-size: 14px;
+}
+
+/* Dropdown Menu inside sidebar width */
+.user-menu {
+  display: flex;
+  flex-direction: column;
+  position: absolute;
+  bottom: 60px; /* adjust if needed */
+  left: 0;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  width: 100%; /* full width of sidebar */
+  max-width: 250px; /* optional max width */
+  box-shadow: 0px 4px 6px rgba(0,0,0,0.1);
+  z-index: 100;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* Menu item styling */
+.menu-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 15px;
+  cursor: pointer;
+  border-bottom: 1px solid #e0e0e0;
+  transition: background-color 0.2s;
+}
+
+.menu-item:last-child {
+  border-bottom: none;
+}
+
+.menu-item:hover {
+  background-color: #f5f5f5;
+}
+
+.menu-icon {
+  margin-right: 10px;
+  font-size: 18px;
+}
+
+.menu-text {
+  font-weight: 500;
+  font-size: 14px;
+  color: #000;
+}
