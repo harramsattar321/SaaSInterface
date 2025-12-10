@@ -1,19 +1,23 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ModelService } from '../../services/model.service';
+import { Subscription } from 'rxjs';
 
 interface Message {
   id: number;
   text: string;
   isUser: boolean;
   timestamp: Date;
-  audioUrl?: string; // For voice messages
+  audioUrl?: string;
   file?: {
     name: string;
     size: number;
     type: string;
   };
+  liked?: boolean;
+  disliked?: boolean;
+  copied?: boolean;
 }
 
 @Component({
@@ -23,7 +27,7 @@ interface Message {
   standalone: true,
   imports: [CommonModule, FormsModule]
 })
-export class ChatAreaComponent implements OnDestroy {
+export class ChatAreaComponent implements OnInit, OnDestroy {
   messages: Message[] = [];
   userInput: string = '';
   selectedFile: File | null = null;
@@ -31,16 +35,10 @@ export class ChatAreaComponent implements OnDestroy {
   editingMessageId: number | null = null;
   editingText = '';
   messageIdCounter = 0;
-  
-  // Selected Model Name
-  selectedModelName: string = 'Model 1';
 
-  constructor(private modelService: ModelService) {
-    // Subscribe to model changes
-    this.modelService.selectedModel$.subscribe(modelName => {
-      this.selectedModelName = modelName;
-    });
-  }
+  // Selected Model from service
+  selectedModel: string = 'model1';
+  private modelSubscription?: Subscription;
 
   // Voice recording properties
   isRecording = false;
@@ -50,7 +48,6 @@ export class ChatAreaComponent implements OnDestroy {
   private recordingStartTime: number = 0;
   private animationInterval: any;
   
-  // Actual recording objects
   private mediaRecorder: MediaRecorder | null = null;
   private audioChunks: Blob[] = [];
   private audioContext: AudioContext | null = null;
@@ -59,14 +56,37 @@ export class ChatAreaComponent implements OnDestroy {
   private animationFrameId: number | null = null;
   private mediaStream: MediaStream | null = null;
 
+  constructor(private modelService: ModelService) {}
+
+  ngOnInit() {
+    // Subscribe to model changes
+    this.modelSubscription = this.modelService.selectedModel$.subscribe(
+      model => {
+        this.selectedModel = model;
+      }
+    );
+  }
+
   ngOnDestroy() {
     this.stopRecordingTimers();
     this.cleanupAudioResources();
+    
+    // Unsubscribe from model service
+    if (this.modelSubscription) {
+      this.modelSubscription.unsubscribe();
+    }
   }
 
-  //--------------------------------------------------------------------
-  // FILE SELECT
-  //--------------------------------------------------------------------
+  // Get display name for model
+  getModelDisplayName(): string {
+    switch(this.selectedModel) {
+      case 'model1': return 'Model 1';
+      case 'model2': return 'Model 2';
+      case 'model3': return 'Model 3';
+      default: return 'Model 1';
+    }
+  }
+
   onFileSelect(event: any) {
     const file = event.target.files[0];
     if (file) {
@@ -84,9 +104,6 @@ export class ChatAreaComponent implements OnDestroy {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
-  //--------------------------------------------------------------------
-  // SEND MESSAGE
-  //--------------------------------------------------------------------
   sendMessage() {
     if (this.userInput.trim() === '' && !this.selectedFile) return;
 
@@ -99,7 +116,6 @@ export class ChatAreaComponent implements OnDestroy {
       timestamp: new Date()
     };
 
-    // If file selected, add file info to message
     if (this.selectedFile) {
       userMessage.file = {
         name: this.selectedFile.name,
@@ -109,12 +125,9 @@ export class ChatAreaComponent implements OnDestroy {
     }
 
     this.messages.push(userMessage);
-
-    // Reset input
     this.userInput = '';
     this.selectedFile = null;
 
-    // AI response
     setTimeout(() => {
       const aiResponse: Message = {
         id: this.messageIdCounter++,
@@ -126,14 +139,10 @@ export class ChatAreaComponent implements OnDestroy {
     }, 800);
   }
 
-  //--------------------------------------------------------------------
   generateResponse(text: string): string {
     return text ? `You said: "${text}"` : 'I received your file!';
   }
 
-  //--------------------------------------------------------------------
-  // EDIT MESSAGE
-  //--------------------------------------------------------------------
   startEdit(message: Message) {
     this.isEditing = true;
     this.editingMessageId = message.id;
@@ -154,9 +163,6 @@ export class ChatAreaComponent implements OnDestroy {
     this.editingText = '';
   }
 
-  //--------------------------------------------------------------------
-  // ENTER KEY HANDLING
-  //--------------------------------------------------------------------
   onKeyPress(event: KeyboardEvent) {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
@@ -171,9 +177,6 @@ export class ChatAreaComponent implements OnDestroy {
     }
   }
 
-  //--------------------------------------------------------------------
-  // VOICE RECORDING - REAL IMPLEMENTATION
-  //--------------------------------------------------------------------
   async toggleVoiceRecording() {
     if (this.isRecording) {
       this.stopRecording();
@@ -184,13 +187,11 @@ export class ChatAreaComponent implements OnDestroy {
 
   async startRecording() {
     try {
-      // Check if browser supports getUserMedia
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         alert('Your browser does not support audio recording');
         return;
       }
 
-      // Request microphone access with specific constraints
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
@@ -205,12 +206,10 @@ export class ChatAreaComponent implements OnDestroy {
       this.recordingTime = '0:00';
       this.audioChunks = [];
       
-      // Setup MediaRecorder for actual recording
       const options: MediaRecorderOptions = {
         mimeType: 'audio/webm'
       };
       
-      // Fallback for Safari
       if (!MediaRecorder.isTypeSupported('audio/webm')) {
         options.mimeType = 'audio/mp4';
       }
@@ -223,9 +222,8 @@ export class ChatAreaComponent implements OnDestroy {
         }
       };
       
-      this.mediaRecorder.start(100); // Collect data every 100ms
+      this.mediaRecorder.start(100);
       
-      // Setup Web Audio API for visualization
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       this.analyser = this.audioContext.createAnalyser();
       this.analyser.fftSize = 64;
@@ -234,10 +232,8 @@ export class ChatAreaComponent implements OnDestroy {
       this.microphone = this.audioContext.createMediaStreamSource(stream);
       this.microphone.connect(this.analyser);
       
-      // Initialize frequency bars
       this.frequencyBars = Array(30).fill(20);
       
-      // Start timer
       this.recordingInterval = setInterval(() => {
         const elapsed = Math.floor((Date.now() - this.recordingStartTime) / 1000);
         const minutes = Math.floor(elapsed / 60);
@@ -245,10 +241,7 @@ export class ChatAreaComponent implements OnDestroy {
         this.recordingTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
       }, 1000);
 
-      // Animate frequency bars based on actual audio
       this.animateFrequencyBars();
-      
-      console.log('Recording started successfully');
       
     } catch (error: any) {
       console.error('Error accessing microphone:', error);
@@ -282,11 +275,9 @@ export class ChatAreaComponent implements OnDestroy {
       
       this.analyser.getByteFrequencyData(dataArray);
       
-      // Update frequency bars based on actual audio data
       this.frequencyBars = Array(30).fill(0).map((_, index) => {
         const dataIndex = Math.floor((index / 30) * bufferLength);
         const value = dataArray[dataIndex] || 0;
-        // Ensure minimum height and scale properly
         return Math.max(20, (value / 255) * 100);
       });
       
@@ -300,20 +291,16 @@ export class ChatAreaComponent implements OnDestroy {
     if (!this.mediaRecorder || this.mediaRecorder.state === 'inactive') return;
     
     this.stopRecordingTimers();
-    
-    // Stop recording
     this.mediaRecorder.stop();
     
     const finalTime = this.recordingTime;
     
-    // Wait for all data to be collected
     this.mediaRecorder.onstop = () => {
       const audioBlob = new Blob(this.audioChunks, { 
         type: this.mediaRecorder?.mimeType || 'audio/webm' 
       });
       const audioUrl = URL.createObjectURL(audioBlob);
       
-      // Send voice message with audio
       const voiceMessage: Message = {
         id: this.messageIdCounter++,
         text: `🎤 Voice message (${finalTime})`,
@@ -323,7 +310,6 @@ export class ChatAreaComponent implements OnDestroy {
       };
       this.messages.push(voiceMessage);
 
-      // AI response
       setTimeout(() => {
         const aiResponse: Message = {
           id: this.messageIdCounter++,
@@ -337,7 +323,6 @@ export class ChatAreaComponent implements OnDestroy {
       this.cleanupAudioResources();
     };
     
-    // Reset recording state
     this.isRecording = false;
     this.recordingTime = '0:00';
     this.frequencyBars = [];
@@ -388,18 +373,21 @@ export class ChatAreaComponent implements OnDestroy {
     }
   }
 
-  //--------------------------------------------------------------------
-  // MESSAGE ACTIONS
-  //--------------------------------------------------------------------
   copyMessage(text: string) {
     navigator.clipboard.writeText(text);
   }
 
-  likeMessage(msg: Message) {
-    console.log('Liked message:', msg);
+  likeMessage(message: any) {
+    message.liked = !message.liked;
+    if (message.liked) {
+      message.disliked = false;
+    }
   }
-
-  dislikeMessage(msg: Message) {
-    console.log('Disliked message:', msg);
+  
+  dislikeMessage(message: any) {
+    message.disliked = !message.disliked;
+    if (message.disliked) {
+      message.liked = false;
+    }
   }
 }

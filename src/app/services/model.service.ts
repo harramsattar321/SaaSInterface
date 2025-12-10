@@ -5,16 +5,21 @@ import { BehaviorSubject, Observable } from 'rxjs';
   providedIn: 'root'
 })
 export class ModelService {
-  private selectedModelSubject = new BehaviorSubject<string>('Model 1');
+  // BehaviorSubject to store and share the selected model
+  private selectedModelSubject = new BehaviorSubject<string>('model1');
+  
+  // Observable that components can subscribe to
   public selectedModel$: Observable<string> = this.selectedModelSubject.asObservable();
 
   constructor() { }
 
-  setModel(model: string): void {
+  // Method to update the selected model
+  setSelectedModel(model: string): void {
     this.selectedModelSubject.next(model);
   }
 
-  getModel(): string {
+  // Method to get the current model value
+  getCurrentModel(): string {
     return this.selectedModelSubject.value;
   }
 }

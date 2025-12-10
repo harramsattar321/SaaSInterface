@@ -201,12 +201,12 @@
 }
 
 .save-btn {
-  background-color: #2563eb;
+  background-color: #3B7A99;
   color: white;
 }
 
 .save-btn:hover {
-  background-color: #1d4ed8;
+  background-color: #3B7A99;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
@@ -666,3 +666,81 @@
     flex-direction: column;
     padding-top: 10px; /* Reduced since header takes space */
   }
+  .message-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.action-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.action-btn svg {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+/* Only target action buttons inside message bubbles */
+.message-actions button {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  width: 36px;   /* uniform width */
+  height: 36px;  /* uniform height */
+}
+
+/* Make all SVGs inside these buttons fit */
+.message-actions button svg {
+  width: 20px;    /* uniform icon size */
+  height: 20px;
+  display: block;
+  object-fit: contain;
+}
+
+/* Optional: hover effect for these buttons */
+.message-actions button:hover svg {
+  stroke: #0D3B66;
+  fill: #0D3B66;
+}
+/* Model Header - Top Left Corner */
+.model-header {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 10;
+}
+
+.model-badge {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  display: inline-block;
+  transition: all 0.3s ease;
+}
+
+.model-badge:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+}
+
+/* Adjust messages container to not overlap with model badge */
+.messages-container {
+  padding-top: 60px; /* Add space for the model badge */
+}

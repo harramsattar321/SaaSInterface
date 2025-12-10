@@ -6,7 +6,6 @@
     class="search-input" 
     placeholder="Search chats..." 
     [(ngModel)]="searchText" 
-    
   />
 
   <!-- New Chat Button -->
@@ -128,4 +127,85 @@
 
   </div>
 
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" *ngIf="showSettingsModal" (click)="closeSettingsModal()">
+  <div class="modal-container" (click)="$event.stopPropagation()">
+    
+    <!-- Modal Header -->
+    <div class="modal-header">
+      <h2>Settings</h2>
+      <button class="close-btn" (click)="closeSettingsModal()">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Modal Body -->
+    <div class="modal-body">
+      <form class="settings-form">
+        
+        <!-- Name Field -->
+        <div class="form-group">
+          <label for="name">Full Name</label>
+          <input 
+            type="text" 
+            id="name" 
+            [(ngModel)]="settingsForm.name" 
+            name="name"
+            placeholder="Enter your full name"
+            required
+          />
+        </div>
+
+        <!-- Email Field -->
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <input 
+            type="email" 
+            id="email" 
+            [(ngModel)]="settingsForm.email" 
+            name="email"
+            placeholder="Enter your email"
+            required
+          />
+        </div>
+
+        <!-- Phone Field -->
+        <div class="form-group">
+          <label for="phone">Phone Number</label>
+          <input 
+            type="tel" 
+            id="phone" 
+            [(ngModel)]="settingsForm.phone" 
+            name="phone"
+            placeholder="Enter your phone number"
+          />
+        </div>
+
+        <!-- Bio Field -->
+        <div class="form-group">
+          <label for="bio">Bio</label>
+          <textarea 
+            id="bio" 
+            [(ngModel)]="settingsForm.bio" 
+            name="bio"
+            placeholder="Tell us about yourself"
+            rows="4"
+          ></textarea>
+        </div>
+
+      </form>
+    </div>
+
+    <!-- Modal Footer -->
+    <div class="modal-footer">
+      <button class="cancel-btn-modal" (click)="closeSettingsModal()">Cancel</button>
+      <button class="save-btn-modal" (click)="saveSettings()">Save Changes</button>
+    </div>
+
+  </div>
 </div>
