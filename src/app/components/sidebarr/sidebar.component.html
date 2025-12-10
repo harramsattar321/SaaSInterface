@@ -1,26 +1,38 @@
 <div class="sidebar">
 
   <!-- SEARCH BAR -->
-  <input type="text" class="search-input" placeholder="Search chats..." [(ngModel)]="searchText" />
+  <input 
+    type="text" 
+    class="search-input" 
+    placeholder="Search chats..." 
+    [(ngModel)]="searchText" 
+    
+  />
 
   <!-- New Chat Button -->
   <button class="new-chat-btn" (click)="startNewChat()">
-    + New Chat
+    <span>+ New Chat</span>
   </button>
 
   <!-- Chat History -->
   <div class="chat-list">
-    <div class="chat-item" *ngFor="let chat of filteredChats()" (click)="openChat(chat)">
+    <div 
+      class="chat-item" 
+      *ngFor="let chat of filteredChats()" 
+      (click)="openChat(chat)"
+    >
 
       <!-- Chat name / rename input -->
       <div class="chat-name-wrapper">
-        <input *ngIf="editingChat === chat" 
+        <input 
+          *ngIf="editingChat === chat" 
           type="text" 
           [(ngModel)]="editingChatName"
           (blur)="saveRename(chat)"
           (keyup.enter)="saveRename(chat)"
           (click)="$event.stopPropagation()"
-          class="rename-input" />
+          class="rename-input" 
+        />
         <span *ngIf="editingChat !== chat" (dblclick)="startRename(chat)">
           {{ chat }}
         </span>
@@ -29,13 +41,19 @@
       <!-- Icons on the right -->
       <div class="chat-icons">
         <!-- Edit -->
-        <button class="icon-btn rename-btn" (click)="startRename(chat); $event.stopPropagation()">
+        <button 
+          class="icon-btn rename-btn" 
+          (click)="startRename(chat); $event.stopPropagation()"
+        >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
             <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.004 1.004 0 0 0 0-1.42l-2.34-2.34a1.004 1.004 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/>
           </svg>
         </button>
         <!-- Delete -->
-        <button class="icon-btn delete-btn" (click)="deleteChat(chat); $event.stopPropagation()">
+        <button 
+          class="icon-btn delete-btn" 
+          (click)="deleteChat(chat); $event.stopPropagation()"
+        >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
             <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
           </svg>
@@ -47,28 +65,36 @@
 
   <!-- Bottom Section -->
   <div class="bottom">
+    
     <!-- === MODEL SWITCHER === -->
     <div class="model-switcher">
-      <button class="model-btn" 
+      <button 
+        class="model-btn" 
         [class.active]="selectedModel === 'model1'" 
-        (click)="selectModel('model1')">
+        (click)="selectModel('model1')"
+      >
         Model 1
       </button>
 
-      <button class="model-btn" 
+      <button 
+        class="model-btn" 
         [class.active]="selectedModel === 'model2'" 
-        (click)="selectModel('model2')">
+        (click)="selectModel('model2')"
+      >
         Model 2
       </button>
 
-      <button class="model-btn" 
+      <button 
+        class="model-btn" 
         [class.active]="selectedModel === 'model3'" 
-        (click)="selectModel('model3')">
+        (click)="selectModel('model3')"
+      >
         Model 3
       </button>
     </div>
     <!-- === END MODEL SWITCHER === -->
 
+    <!-- User Info -->
     <div class="user-info" (click)="toggleUserMenu()">
       <div class="user-avatar">{{ userInitials }}</div>
       <div class="user-name">{{ userName }}</div>
@@ -86,6 +112,7 @@
         </span>
         <span class="menu-text">Settings</span>
       </div>
+      
       <!-- Log out -->
       <div class="menu-item" (click)="logOut()">
         <span class="menu-icon">
@@ -98,6 +125,7 @@
         <span class="menu-text">Log out</span>
       </div>
     </div>
+
   </div>
 
 </div>

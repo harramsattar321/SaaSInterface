@@ -1,4 +1,15 @@
 /* Global Reset */
+:root {
+  --color-light-blue: #A4C8E1;
+  --color-sky-blue: #6FA3D8;
+  --color-medium-blue: #3B7A99;
+  --color-dark-blue: #1F4E79;
+  --color-navy-blue: #0D3B66;
+}
+
+body {
+  overflow-x: hidden;
+}
 * {
   margin: 0;
   padding: 0;
