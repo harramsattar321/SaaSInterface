@@ -1,0 +1,43 @@
+<div class="login-wrapper">
+  <div class="login-card">
+    <h2 class="title">Sign In</h2>
+    <p class="subtitle">Access your patient dashboard</p>
+
+    <!-- Error -->
+    <div class="error-box" *ngIf="errorMessage">
+      {{ errorMessage }}
+    </div>
+
+    <form (ngSubmit)="onLogin()">
+      <div class="input-group">
+        <label>Email</label>
+        <input
+          type="email"
+          [(ngModel)]="email"
+          name="email"
+          placeholder="example@mail.com"
+          required
+        />
+      </div>
+
+      <div class="input-group">
+        <label>Password</label>
+        <input
+          type="password"
+          [(ngModel)]="password"
+          name="password"
+          placeholder="Enter password"
+          required
+        />
+      </div>
+
+      <button class="btn-login" type="submit" [disabled]="loading">
+        {{ loading ? "Please wait..." : "Login" }}
+      </button>
+    </form>
+
+    <p class="signup-text">
+      New user? <a routerLink="/signup">Create an account</a>
+    </p>
+  </div>
+</div>

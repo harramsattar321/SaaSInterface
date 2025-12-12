@@ -1,0 +1,99 @@
+<div class="signup-wrapper">
+  <div class="signup-card">
+    <h2 class="title">Create Account</h2>
+    <p class="subtitle">Join us to access your personalized patient dashboard</p>
+
+    <!-- Error -->
+    <div class="error-box" *ngIf="errorMessage">
+      {{ errorMessage }}
+    </div>
+
+    <!-- Success -->
+    <div class="success-box" *ngIf="successMessage">
+      {{ successMessage }}
+    </div>
+
+    <form (ngSubmit)="onSignup()">
+      <!-- First Name -->
+      <div class="input-group">
+        <label>First Name</label>
+        <input
+          type="text"
+          [(ngModel)]="signupData.firstName"
+          name="firstName"
+          placeholder="Enter first name"
+          required
+        />
+      </div>
+
+      <!-- Last Name -->
+      <div class="input-group">
+        <label>Last Name</label>
+        <input
+          type="text"
+          [(ngModel)]="signupData.lastName"
+          name="lastName"
+          placeholder="Enter last name"
+          required
+        />
+      </div>
+
+      <!-- Email -->
+      <div class="input-group">
+        <label>Email</label>
+        <input
+          type="email"
+          [(ngModel)]="signupData.email"
+          name="email"
+          placeholder="Enter email"
+          required
+        />
+      </div>
+
+      <!-- Phone -->
+      <div class="input-group">
+        <label>Phone Number</label>
+        <input
+          type="tel"
+          [(ngModel)]="signupData.phoneNumber"
+          name="phoneNumber"
+          placeholder="Enter phone number"
+          required
+        />
+      </div>
+
+      <!-- Password -->
+      <div class="input-group">
+        <label>Password</label>
+        <input
+          type="password"
+          [(ngModel)]="signupData.password"
+          name="password"
+          placeholder="Create password"
+          required
+        />
+      </div>
+
+      <!-- Confirm Password -->
+      <div class="input-group">
+        <label>Confirm Password</label>
+        <input
+          type="password"
+          [(ngModel)]="confirmPassword"
+          name="confirmPassword"
+          placeholder="Re-enter password"
+          required
+        />
+      </div>
+
+      <!-- Submit -->
+      <button class="signup-btn" type="submit" [disabled]="loading">
+        {{ loading ? "Creating Account..." : "Create Account" }}
+      </button>
+    </form>
+
+    <p class="login-text">
+      Already have an account? <a routerLink="/login">Sign In</a>
+    </p>
+  </div>
+</div>

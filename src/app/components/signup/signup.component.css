@@ -1,0 +1,133 @@
+/* -----------------------------------------
+   Signup Page CSS (Login Page Effect)
+------------------------------------------ */
+
+/* Background: light blue */
+.signup-wrapper {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e8f1ff; /* soft blue */
+  padding: 20px;
+}
+
+/* Main card: white */
+.signup-card {
+  width: 100%;
+  max-width: 500px;
+  padding: 35px;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 8px 32px rgba(0, 80, 180, 0.2);
+  text-align: center;
+  border: 1px solid #0D3B66; /* deep blue border */
+}
+
+/* Text: blue + dark navy */
+.title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #0d3b66; /* deep blue */
+  margin-bottom: 6px;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: #0D3B66; /* medium blue */
+  margin-bottom: 25px;
+}
+
+/* Inputs */
+.input-group {
+  text-align: left;
+  margin-bottom: 18px;
+  margin-right: 30px;
+}
+
+.input-group label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0d3b66; /* dark blue label */
+  margin-bottom: 6px;
+  display: block;
+}
+
+.input-group input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 2px solid #c7d9ff; /* light blue border */
+  font-size: 14px;
+  outline: none;
+  background: #ffffff;
+  transition: 0.2s;
+}
+
+.input-group input:focus {
+  border-color: #0D3B66; /* deep blue on focus */
+  box-shadow: 0 0 6px rgba(13, 59, 102, 0.3); /* subtle blue glow */
+}
+
+/* Error box */
+.error-box {
+  background: #ffebee;
+  color: #d62828;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 15px;
+  border: 1px solid #ffb3b3;
+}
+
+/* Success box */
+.success-box {
+  background: #c6f6d5;
+  color: #22543d;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 15px;
+  border: 1px solid #9ae6b4;
+}
+
+/* Button: Blue */
+.signup-btn {
+  width: 100%;
+  padding: 14px;
+  background: #0D3B66; /* solid blue */
+  border: none;
+  color: #ffffff;
+  font-weight: 700;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.signup-btn:hover:not(:disabled) {
+  background: #0D3B66;
+  box-shadow: 0 6px 18px rgba(13, 59, 102, 0.35);
+}
+
+.signup-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Login link text */
+.login-text {
+  margin-top: 18px;
+  font-size: 14px;
+  color: #0d3b66;
+}
+
+.login-text a {
+  font-weight: 700;
+  color: #0D3B66;
+  text-decoration: none;
+}
+
+.login-text a:hover {
+  text-decoration: underline;
+}

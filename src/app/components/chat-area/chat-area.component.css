@@ -744,3 +744,146 @@
 .messages-container {
   padding-top: 60px; /* Add space for the model badge */
 }
+.message-time {
+  font-size: 12px;
+  color: gray;
+  margin: 2px 0 10px 0; /* spacing below the bubble */
+  text-align: right;     /* aligns timestamp to the right */
+}
+
+/* Message Footer - Contains actions and timestamp */
+.message-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 0 4px;
+}
+
+/* External Action Buttons Container */
+.message-actions-external {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 1; /* Always visible */
+  transition: opacity 0.2s ease;
+}
+
+/* External Action Button Styles */
+.action-btn-external {
+  background: transparent;
+  border: none;
+  padding: 6px;
+  cursor: pointer;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  color: #666;
+}
+
+.action-btn-external:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #333;
+}
+
+.action-btn-external:active {
+  transform: scale(0.95);
+}
+
+.action-btn-external svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Edit Icon Button - Slightly larger */
+.edit-icon-btn {
+  background: transparent;
+  border: none;
+  padding: 6px;
+  cursor: pointer;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  color: #666;
+}
+
+.edit-icon-btn svg {
+  width: 21px;
+  height: 21px;
+}
+
+.edit-icon-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #333;
+}
+
+.edit-icon-btn:active {
+  transform: scale(0.95);
+}
+
+/* Message Time */
+.message-time {
+  font-size: 11px;
+  color: #999;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* User Message Alignment */
+.user-message .message-footer {
+  justify-content: flex-end;
+}
+
+/* AI Message Alignment */
+.ai-message .message-footer {
+  justify-content: flex-start;
+}
+
+/* Dark mode support (optional) */
+@media (prefers-color-scheme: dark) {
+  .action-btn-external {
+    color: #aaa;
+  }
+  
+  .action-btn-external:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+  
+  .edit-icon-btn {
+    color: #aaa;
+  }
+  
+  .edit-icon-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+  
+  .message-time {
+    color: #666;
+  }
+}
+
+/* Remove old message-actions class if it exists inside bubble */
+.message-bubble .message-actions {
+  display: none;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .message-actions-external {
+    opacity: 1; /* Always show on mobile */
+  }
+  
+  .action-btn-external {
+    padding: 8px;
+  }
+  
+  .message-footer {
+    gap: 6px;
+  }
+}

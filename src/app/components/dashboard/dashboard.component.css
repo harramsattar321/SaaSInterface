@@ -1,0 +1,46 @@
+/* Use global color variables from src/styles.css (e.g. --bg-light, --white, --blue-main) */
+
+/* Layout */
+.dashboard-container {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  width: 100%;
+  background: var(--bg-light); /* subtle app background */
+}
+
+/* When the sidebar is a web component selector */
+app-sidebar {
+  flex-shrink: 0;
+  /* if your sidebar needs a background, keep it consistent with global white */
+  background: var(--white);
+  /* optional: ensure sidebar takes its own width (the sidebar component can override) */
+  min-width: 260px;
+}
+
+/* Chat area fills remaining space */
+app-chat-area {
+  flex: 1;
+  overflow: hidden;
+  background: transparent;
+  /* ensure chat area text contrasts if it contains white cards */
+  color: var(--text-dark);
+}
+
+/* Responsive fallback: collapse into column on small screens */
+@media (max-width: 800px) {
+  .dashboard-container {
+    flex-direction: column;
+    height: auto;
+  }
+
+  app-sidebar {
+    width: 100%;
+    min-width: auto;
+  }
+
+  app-chat-area {
+    width: 100%;
+    min-height: calc(100vh - 64px);
+  }
+}

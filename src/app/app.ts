@@ -1,15 +1,14 @@
-import { Component, signal } from '@angular/core';
+// src/app/app.component.ts
+import { Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
-import { SidebarComponent } from './components/sidebarr/sidebar.component';
-import { ChatAreaComponent } from './components/chat-area/chat-area.component';
 
 @Component({
   selector: 'app-root',
-  templateUrl: './app.html',
-  styleUrls: ['./app.css'],
   standalone: true,
-  imports: [RouterOutlet, SidebarComponent, ChatAreaComponent]
+  imports: [RouterOutlet],
+  template: '<router-outlet></router-outlet>',
+  styles: []
 })
 export class App {
-  protected readonly title = signal('hospital-website');
+  title = 'hospital-website';
 }
