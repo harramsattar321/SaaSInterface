@@ -785,7 +785,7 @@
 
 .action-btn-external:hover {
   background: rgba(0, 0, 0, 0.05);
-  color: #333;
+  color: blue;
 }
 
 .action-btn-external:active {
@@ -818,7 +818,7 @@
 
 .edit-icon-btn:hover {
   background: rgba(0, 0, 0, 0.05);
-  color: #333;
+  color: #aaa;
 }
 
 .edit-icon-btn:active {
@@ -851,7 +851,8 @@
   
   .action-btn-external:hover {
     background: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    color: #aaa;
+    scale: 1.2;
   }
   
   .edit-icon-btn {
@@ -860,7 +861,7 @@
   
   .edit-icon-btn:hover {
     background: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    color: #aaa;
   }
   
   .message-time {
