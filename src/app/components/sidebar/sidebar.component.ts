@@ -1,9 +1,10 @@
-// src/app/components/sidebar/sidebar.component.ts - UPDATED
+// src/app/components/sidebar/sidebar.component.ts
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ModelService } from '../../services/model.service';
 import { AuthService, User } from '../../services/auth.service';
+import { ChatService, ChatSession } from '../../services/chat.services';
 import { Subscription } from 'rxjs';
 
 @Component({
@@ -17,18 +18,40 @@ export class SidebarComponent implements OnInit, OnDestroy {
 
   // MODEL SWITCHER
   selectedModel: string = 'model1';
-  
+
   // Auth
   currentUser: User | null = null;
   private userSubscription?: Subscription;
-  
+  private chatListSubscription?: Subscription;
+
+  // Real chats from backend
+  chats: ChatSession[] = [];
+  activeChatId: string | null = null;
+
+  // Search
+  searchText = '';
+
+  // Inline rename
+  editingChatId: string | null = null;
+  editingChatName: string = '';
+
+  // User Info
+  userName = 'John Doe';
+  userEmail = 'john.doe@example.com';
+  userMenuOpen = false;
+
+  // Settings Modal
+  showSettingsModal = false;
+  settingsForm = { name: '', email: '', phone: '', bio: '' };
+
   constructor(
     private modelService: ModelService,
-    private authService: AuthService
+    private authService: AuthService,
+    private chatService: ChatService
   ) {}
 
   ngOnInit() {
-    // Subscribe to user changes
+    // Subscribe to auth user
     this.userSubscription = this.authService.currentUser$.subscribe(user => {
       this.currentUser = user;
       if (user) {
@@ -36,12 +59,26 @@ export class SidebarComponent implements OnInit, OnDestroy {
         this.userEmail = user.email;
       }
     });
+
+    // Subscribe to real chat list from ChatService
+    this.chatListSubscription = this.chatService.chatList$.subscribe(chats => {
+      this.chats = chats;
+    });
+
+    // Track active chat for highlight
+    this.chatService.activeChatId$.subscribe(id => {
+      this.activeChatId = id;
+    });
+
+    // Load chats from backend on startup
+    this.chatService.loadChatList().subscribe({
+      error: err => console.error('Failed to load chats:', err)
+    });
   }
 
   ngOnDestroy() {
-    if (this.userSubscription) {
-      this.userSubscription.unsubscribe();
-    }
+    this.userSubscription?.unsubscribe();
+    this.chatListSubscription?.unsubscribe();
   }
 
   selectModel(model: string) {
@@ -49,90 +86,78 @@ export class SidebarComponent implements OnInit, OnDestroy {
     this.modelService.setSelectedModel(model);
   }
 
-  // Search
-  searchText = "";
-  
-  // Chats
-  chats: string[] = ['Chat 1', 'Chat 2', 'Chat 3', 'Hospital Records', 'Patient Reports'];
-
-  // Inline rename
-  editingChat: string | null = null;
-  editingChatName: string = "";
-
-  // User Info
-  userName = "John Doe";
-  userEmail = "john.doe@example.com";
-  userMenuOpen = false;
-
-  // Settings Modal
-  showSettingsModal = false;
-  settingsForm = {
-    name: '',
-    email: '',
-    phone: '',
-    bio: ''
-  };
-
-  // Initials - NOW USING REAL USER DATA
+  // Initials
   get userInitials(): string {
     if (!this.currentUser) return 'U';
-    
-    const firstInitial = this.currentUser.firstName.charAt(0).toUpperCase();
-    const lastInitial = this.currentUser.lastName.charAt(0).toUpperCase();
-    return firstInitial + lastInitial;
-  }
-
-  // Add new chat
-  startNewChat() {
-    const newChat = `Chat ${this.chats.length + 1}`;
-    this.chats.push(newChat);
-  }
-
-  // Open chat
-  openChat(chat: string) {
-    if (this.editingChat === chat) return;
-    console.log(`Opening ${chat}`);
-  }
-
-  // Delete chat
-  deleteChat(chat: string) {
-    this.chats = this.chats.filter(c => c !== chat);
-  }
-
-  // Rename start
-  startRename(chat: string) {
-    this.editingChat = chat;
-    this.editingChatName = chat;
-  }
-
-  // Rename save
-  saveRename(chat: string) {
-    if (this.editingChatName.trim() !== "") {
-      const index = this.chats.indexOf(chat);
-      if (index !== -1) {
-        this.chats[index] = this.editingChatName.trim();
-      }
-    }
-    this.editingChat = null;
-  }
-
-  // Search filter
-  filteredChats() {
-    return this.chats.filter(c =>
-      c.toLowerCase().includes(this.searchText.toLowerCase())
+    return (
+      this.currentUser.firstName.charAt(0).toUpperCase() +
+      this.currentUser.lastName.charAt(0).toUpperCase()
     );
   }
 
-  // Toggle menu
+  // Filtered chats for search
+  filteredChats(): ChatSession[] {
+    if (!this.searchText.trim()) return this.chats;
+    return this.chats.filter(c =>
+      c.title.toLowerCase().includes(this.searchText.toLowerCase())
+    );
+  }
+
+  // Start a new chat
+  startNewChat() {
+    this.chatService.createNewChat().subscribe({
+      error: err => console.error('Failed to create new chat:', err)
+    });
+  }
+
+  // Open / select a chat
+  openChat(chat: ChatSession) {
+    if (this.editingChatId === chat.chatId) return;
+    this.chatService.setActiveChat(chat.chatId);
+  }
+
+  // Delete a chat
+  deleteChat(chat: ChatSession, event: Event) {
+    event.stopPropagation(); // don't trigger openChat
+    if (!confirm(`Delete "${chat.title}"?`)) return;
+    this.chatService.deleteChat(chat.chatId).subscribe({
+      error: err => console.error('Failed to delete chat:', err)
+    });
+  }
+
+  // Start rename
+  startRename(chat: ChatSession, event: Event) {
+    event.stopPropagation();
+    this.editingChatId = chat.chatId;
+    this.editingChatName = chat.title;
+  }
+
+  // Save rename
+  saveRename(chat: ChatSession) {
+    if (this.editingChatName.trim() === '') {
+      this.editingChatId = null;
+      return;
+    }
+    this.chatService.renameChat(chat.chatId, this.editingChatName.trim()).subscribe({
+      error: err => console.error('Failed to rename chat:', err)
+    });
+    this.editingChatId = null;
+  }
+
+  // Cancel rename on Escape
+  onRenameKeyPress(event: KeyboardEvent, chat: ChatSession) {
+    if (event.key === 'Enter') this.saveRename(chat);
+    if (event.key === 'Escape') this.editingChatId = null;
+  }
+
+  // Toggle user menu
   toggleUserMenu() {
     this.userMenuOpen = !this.userMenuOpen;
   }
 
-  // Open Settings Modal
+  // Settings
   openSettings() {
     this.userMenuOpen = false;
-    
-    // Pre-fill form with current user data
     if (this.currentUser) {
       this.settingsForm = {
         name: `${this.currentUser.firstName} ${this.currentUser.lastName}`,
@@ -141,40 +166,34 @@ export class SidebarComponent implements OnInit, OnDestroy {
         bio: ''
       };
     }
-    
     this.showSettingsModal = true;
   }
 
-  // Close Settings Modal
   closeSettingsModal() {
     this.showSettingsModal = false;
   }
 
-  // Save Settings - NOW WITH API CALL
   saveSettings() {
     if (!this.currentUser) return;
-
     const nameParts = this.settingsForm.name.trim().split(' ');
     const updateData = {
       firstName: nameParts[0] || this.currentUser.firstName,
       lastName: nameParts.slice(1).join(' ') || this.currentUser.lastName,
       phoneNumber: this.settingsForm.phone || this.currentUser.phoneNumber
     };
-
     this.authService.updateProfile(updateData).subscribe({
-      next: (response) => {
-        if (response.success) {
+      next: res => {
+        if (res.success) {
           alert('Settings saved successfully!');
           this.closeSettingsModal();
         }
       },
-      error: (error) => {
-        alert('Failed to save settings: ' + (error.error?.message || 'Unknown error'));
+      error: err => {
+        alert('Failed to save settings: ' + (err.error?.message || 'Unknown error'));
       }
     });
   }
 
-  // Log out - NOW WITH REAL LOGOUT
   logOut() {
     this.userMenuOpen = false;
     if (confirm('Are you sure you want to logout?')) {
