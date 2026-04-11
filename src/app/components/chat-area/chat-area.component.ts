@@ -1,8 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, ChangeDetectorRef } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ModelService } from '../../services/model.service';
 import { Subscription } from 'rxjs';
+import { ChatService } from '../../services/chat.services';
 
 interface Message {
   id: number;
@@ -35,31 +36,35 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
   editingMessageId: number | null = null;
   editingText = '';
   messageIdCounter = 0;
+  
+  isLoading = false;
 
-  // Selected Model from service
   selectedModel: string = 'model1';
   private modelSubscription?: Subscription;
 
-  // Voice recording properties
   isRecording = false;
   recordingTime = '0:00';
   frequencyBars: number[] = [];
   private recordingInterval: any;
   private recordingStartTime: number = 0;
-  private animationInterval: any;
   
-  private mediaRecorder: MediaRecorder | null = null;
-  private audioChunks: Blob[] = [];
   private audioContext: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
   private microphone: MediaStreamAudioSourceNode | null = null;
   private animationFrameId: number | null = null;
   private mediaStream: MediaStream | null = null;
 
-  constructor(private modelService: ModelService) {}
+  private recognition: any = null;
+  private initialInputText: string = '';
+
+  // ADDED: ChangeDetectorRef to the constructor
+  constructor(
+    private modelService: ModelService, 
+    private chatService: ChatService,
+    private cdr: ChangeDetectorRef 
+  ) {}
 
   ngOnInit() {
-    // Subscribe to model changes
     this.modelSubscription = this.modelService.selectedModel$.subscribe(
       model => {
         this.selectedModel = model;
@@ -70,86 +75,68 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.stopRecordingTimers();
     this.cleanupAudioResources();
-    
-    // Unsubscribe from model service
+    if (this.recognition) {
+      this.recognition.stop();
+    }
     if (this.modelSubscription) {
       this.modelSubscription.unsubscribe();
     }
   }
 
-  // Get display name for model
-  getModelDisplayName(): string {
-    switch(this.selectedModel) {
-      case 'model1': return 'Model 1';
-      case 'model2': return 'Model 2';
-      case 'model3': return 'Model 3';
-      default: return 'Model 1';
-    }
-  }
-
-  onFileSelect(event: any) {
-    const file = event.target.files[0];
-    if (file) {
-      this.selectedFile = file;
-    }
-  }
-
-  removeFile() {
-    this.selectedFile = null;
-  }
-
-  formatFileSize(bytes: number): string {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  }
-
   sendMessage() {
-    if (this.userInput.trim() === '' && !this.selectedFile) return;
+    if (this.isRecording) {
+      this.stopRecording();
+    }
 
+    if (this.userInput.trim() === '' && !this.selectedFile) return;
+  
     const messageText = this.userInput.trim();
-    
+  
     const userMessage: Message = {
       id: this.messageIdCounter++,
       text: messageText || 'File attached',
       isUser: true,
       timestamp: new Date()
     };
-
-    if (this.selectedFile) {
-      userMessage.file = {
-        name: this.selectedFile.name,
-        size: this.selectedFile.size,
-        type: this.selectedFile.type
-      };
-    }
-
+  
     this.messages.push(userMessage);
     this.userInput = '';
-    this.selectedFile = null;
+  
+    this.isLoading = true;
 
-    setTimeout(() => {
-      const aiResponse: Message = {
-        id: this.messageIdCounter++,
-        text: this.generateResponse(messageText),
-        isUser: false,
-        timestamp: new Date()
-      };
-      this.messages.push(aiResponse);
-    }, 800);
+    this.chatService.sendMessage(messageText).subscribe({
+      next: (res) => {
+        this.isLoading = false;
+        const aiResponse: Message = {
+          id: this.messageIdCounter++,
+          text: res.reply,
+          isUser: false,
+          timestamp: new Date()
+        };
+        this.messages.push(aiResponse);
+      },
+      error: (err) => {
+        this.isLoading = false;
+        const errMsg = err.status === 401
+          ? 'Session expired. Please log in again.'
+          : 'Something went wrong. Please try again.';
+        this.messages.push({
+          id: this.messageIdCounter++,
+          text: errMsg,
+          isUser: false,
+          timestamp: new Date()
+        });
+      }
+    });
   }
 
-  generateResponse(text: string): string {
-    return text ? `You said: "${text}"` : 'I received your file!';
-  }
-
-  startEdit(message: Message) {
+  startEdit(message: Message) { 
     this.isEditing = true;
     this.editingMessageId = message.id;
     this.editingText = message.text;
   }
 
-  saveEdit() {
+  saveEdit() { 
     const index = this.messages.findIndex(m => m.id === this.editingMessageId);
     if (index !== -1) {
       this.messages[index].text = this.editingText.trim();
@@ -157,20 +144,20 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
     this.cancelEdit();
   }
 
-  cancelEdit() {
+  cancelEdit() { 
     this.isEditing = false;
     this.editingMessageId = null;
     this.editingText = '';
   }
 
-  onKeyPress(event: KeyboardEvent) {
+  onKeyPress(event: KeyboardEvent) { 
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       this.sendMessage();
     }
   }
 
-  onEditKeyPress(event: KeyboardEvent) {
+  onEditKeyPress(event: KeyboardEvent) { 
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       this.saveEdit();
@@ -187,43 +174,59 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
 
   async startRecording() {
     try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        alert('Your browser does not support audio recording');
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert('Speech recognition is not supported in this browser. Please use Chrome or Edge.');
         return;
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        } 
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
       });
       
       this.mediaStream = stream;
       this.isRecording = true;
       this.recordingStartTime = Date.now();
       this.recordingTime = '0:00';
-      this.audioChunks = [];
+      this.initialInputText = this.userInput; 
       
-      const options: MediaRecorderOptions = {
-        mimeType: 'audio/webm'
+      // POKE ANGULAR: Wake up and show the visualizer/wiggle immediately!
+      this.cdr.detectChanges(); 
+      
+      this.recognition = new SpeechRecognition();
+      this.recognition.continuous = true;
+      this.recognition.interimResults = true; 
+
+      this.recognition.onresult = (event: any) => {
+        let interimTranscript = '';
+        let finalTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+        
+        const currentTranscript = finalTranscript + interimTranscript;
+        this.userInput = this.initialInputText 
+          ? `${this.initialInputText} ${currentTranscript}` 
+          : currentTranscript;
+          
+        // POKE ANGULAR: Show the live typed text instantly!
+        this.cdr.detectChanges(); 
       };
-      
-      if (!MediaRecorder.isTypeSupported('audio/webm')) {
-        options.mimeType = 'audio/mp4';
-      }
-      
-      this.mediaRecorder = new MediaRecorder(stream, options);
-      
-      this.mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          this.audioChunks.push(event.data);
+
+      this.recognition.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error);
+        if (event.error !== 'no-speech') {
+          this.cancelRecording();
         }
       };
-      
-      this.mediaRecorder.start(100);
-      
+
+      this.recognition.start();
+
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       this.analyser = this.audioContext.createAnalyser();
       this.analyser.fftSize = 64;
@@ -231,7 +234,6 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
       
       this.microphone = this.audioContext.createMediaStreamSource(stream);
       this.microphone.connect(this.analyser);
-      
       this.frequencyBars = Array(30).fill(20);
       
       this.recordingInterval = setInterval(() => {
@@ -239,27 +241,18 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
         const minutes = Math.floor(elapsed / 60);
         const seconds = elapsed % 60;
         this.recordingTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        
+        // POKE ANGULAR: Update the timer every second!
+        this.cdr.detectChanges();
       }, 1000);
 
       this.animateFrequencyBars();
       
     } catch (error: any) {
-      console.error('Error accessing microphone:', error);
-      
-      let errorMessage = 'Could not access microphone. ';
-      
-      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-        errorMessage += 'Please allow microphone access in your browser settings.';
-      } else if (error.name === 'NotFoundError') {
-        errorMessage += 'No microphone found on your device.';
-      } else if (error.name === 'NotReadableError') {
-        errorMessage += 'Microphone is already in use by another application.';
-      } else {
-        errorMessage += 'Error: ' + error.message;
-      }
-      
-      alert(errorMessage);
+      console.error('Error starting recording:', error);
+      alert('Could not access microphone or start speech recognition.');
       this.isRecording = false;
+      this.cdr.detectChanges();
       this.cleanupAudioResources();
     }
   }
@@ -281,6 +274,9 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
         return Math.max(20, (value / 255) * 100);
       });
       
+      // POKE ANGULAR: Make the spikes jump smoothly!
+      this.cdr.detectChanges();
+      
       this.animationFrameId = requestAnimationFrame(animate);
     };
     
@@ -288,59 +284,35 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
   }
 
   stopRecording() {
-    if (!this.mediaRecorder || this.mediaRecorder.state === 'inactive') return;
-    
-    this.stopRecordingTimers();
-    this.mediaRecorder.stop();
-    
-    const finalTime = this.recordingTime;
-    
-    this.mediaRecorder.onstop = () => {
-      const audioBlob = new Blob(this.audioChunks, { 
-        type: this.mediaRecorder?.mimeType || 'audio/webm' 
-      });
-      const audioUrl = URL.createObjectURL(audioBlob);
-      
-      const voiceMessage: Message = {
-        id: this.messageIdCounter++,
-        text: `🎤 Voice message (${finalTime})`,
-        isUser: true,
-        timestamp: new Date(),
-        audioUrl: audioUrl
-      };
-      this.messages.push(voiceMessage);
-
-      setTimeout(() => {
-        const aiResponse: Message = {
-          id: this.messageIdCounter++,
-          text: 'I received your voice message!',
-          isUser: false,
-          timestamp: new Date()
-        };
-        this.messages.push(aiResponse);
-      }, 800);
-      
-      this.cleanupAudioResources();
-    };
-    
     this.isRecording = false;
-    this.recordingTime = '0:00';
+    
+    // POKE ANGULAR: Hide visualizer when stopping
+    this.cdr.detectChanges();
+    
+    if (this.recognition) {
+      this.recognition.stop();
+    }
+
+    this.stopRecordingTimers();
+    this.cleanupAudioResources();
     this.frequencyBars = [];
-    this.audioChunks = [];
   }
 
   cancelRecording() {
-    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-      this.mediaRecorder.stop();
+    this.isRecording = false;
+    
+    // POKE ANGULAR: Hide visualizer when cancelling
+    this.cdr.detectChanges();
+
+    if (this.recognition) {
+      this.recognition.stop();
     }
     
     this.stopRecordingTimers();
     this.cleanupAudioResources();
-    
-    this.isRecording = false;
-    this.recordingTime = '0:00';
     this.frequencyBars = [];
-    this.audioChunks = [];
+    
+    this.userInput = this.initialInputText;
   }
 
   private stopRecordingTimers() {
@@ -373,18 +345,18 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
     }
   }
 
-  copyMessage(text: string) {
+  copyMessage(text: string) { 
     navigator.clipboard.writeText(text);
   }
 
-  likeMessage(message: any) {
+  likeMessage(message: any) { 
     message.liked = !message.liked;
     if (message.liked) {
       message.disliked = false;
     }
   }
   
-  dislikeMessage(message: any) {
+  dislikeMessage(message: any) { 
     message.disliked = !message.disliked;
     if (message.disliked) {
       message.liked = false;
