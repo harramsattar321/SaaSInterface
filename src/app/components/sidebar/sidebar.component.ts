@@ -1,6 +1,6 @@
 // src/app/components/sidebar/sidebar.component.ts
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, HostListener } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ModelService } from '../../services/model.service';
 import { AuthService, User } from '../../services/auth.service';
@@ -47,8 +47,19 @@ export class SidebarComponent implements OnInit, OnDestroy {
   constructor(
     private modelService: ModelService,
     private authService: AuthService,
-    private chatService: ChatService
+    private chatService: ChatService,
+    private cdr: ChangeDetectorRef,
+    private elementRef: ElementRef
   ) {}
+
+  // Close user menu when clicking anywhere outside the sidebar
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent) {
+    if (this.userMenuOpen && !this.elementRef.nativeElement.contains(event.target)) {
+      this.userMenuOpen = false;
+      this.cdr.detectChanges();
+    }
+  }
 
   ngOnInit() {
     // Subscribe to auth user
@@ -63,11 +74,13 @@ export class SidebarComponent implements OnInit, OnDestroy {
     // Subscribe to real chat list from ChatService
     this.chatListSubscription = this.chatService.chatList$.subscribe(chats => {
       this.chats = chats;
+      this.cdr.detectChanges();
     });
 
     // Track active chat for highlight
     this.chatService.activeChatId$.subscribe(id => {
       this.activeChatId = id;
+      this.cdr.detectChanges();
     });
 
     // Load chats from backend on startup

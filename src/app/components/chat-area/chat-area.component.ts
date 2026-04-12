@@ -38,13 +38,12 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
   messageIdCounter = 0;
 
   isLoading = false;
-  isLoadingChat = false;     // shown while fetching a chat's history
+  isLoadingChat = false;
 
   selectedModel: string = 'model1';
   private modelSubscription?: Subscription;
   private activeChatSubscription?: Subscription;
 
-  // The MongoDB _id of the currently open chat session
   private currentChatId: string | null = null;
 
   isRecording = false;
@@ -71,20 +70,12 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
   // ─── Lifecycle ─────────────────────────────────────────────────────────────
 
   ngOnInit() {
-    // Track selected AI model
     this.modelSubscription = this.modelService.selectedModel$.subscribe(
       model => { this.selectedModel = model; }
     );
 
-    // Load chat list from backend on startup
-    this.chatService.loadChatList().subscribe({
-      error: err => console.error('Failed to load chat list:', err)
-    });
+    // ✅ REMOVED: loadChatList() — sidebar handles this exclusively
 
-    // When active chat changes (sidebar click or new chat button),
-    // load that chat's full message history.
-    // Skip reload if a message is in-flight (isLoading) to avoid the race condition
-    // where createNewChat() fires activeChatId$ and wipes currentChatId mid-send.
     this.activeChatSubscription = this.chatService.activeChatId$.subscribe(
       chatId => {
         if (!chatId) {
@@ -93,7 +84,6 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
           this.cdr.detectChanges();
         } else if (chatId !== this.currentChatId) {
           if (this.isLoading) {
-            // Message in-flight: track new ID silently, don't reload messages
             this.currentChatId = chatId;
           } else {
             this.openChat(chatId);
@@ -113,7 +103,6 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
 
   // ─── Chat Loading ──────────────────────────────────────────────────────────
 
-  /** Load full message history for a chat and display it */
   private openChat(chatId: string) {
     this.isLoadingChat = true;
     this.messages = [];
@@ -123,15 +112,12 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
       next: res => {
         this.currentChatId = chatId;
         this.isLoadingChat = false;
-
-        // Map backend messages → local Message interface
         this.messages = res.chat.messages.map(m => ({
           id: this.messageIdCounter++,
           text: m.content,
           isUser: m.role === 'user',
           timestamp: new Date(m.timestamp ?? Date.now())
         }));
-
         this.cdr.detectChanges();
       },
       error: err => {
@@ -139,19 +125,6 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
         this.isLoadingChat = false;
         this.cdr.detectChanges();
       }
-    });
-  }
-
-  // ─── New Chat ──────────────────────────────────────────────────────────────
-
-  /** Called from sidebar "New Chat" button (or directly) */
-  startNewChat() {
-    this.chatService.createNewChat().subscribe({
-      next: res => {
-        // activeChatId$ subscription above will pick this up and clear messages
-        console.log('New chat created:', res.chat.chatId);
-      },
-      error: err => console.error('Failed to create new chat:', err)
     });
   }
 
@@ -163,7 +136,6 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
 
     const messageText = this.userInput.trim();
 
-    // Optimistically add user message to UI immediately
     const userMessage: Message = {
       id: this.messageIdCounter++,
       text: messageText || 'File attached',
@@ -175,7 +147,6 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
     this.isLoading = true;
     this.cdr.detectChanges();
 
-    // If no chat session exists yet, create one first, then send
     if (!this.currentChatId) {
       this.chatService.createNewChat().subscribe({
         next: res => {
@@ -193,28 +164,15 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
     }
   }
 
-  /**
-   * Saves the user message to MongoDB, then calls Flask for AI reply,
-   * then saves the AI reply to MongoDB.
-   * chatId is captured at call-time and NEVER read from this.currentChatId again
-   * to avoid any race condition with the activeChatId$ subscription.
-   */
   private dispatchMessage(messageText: string) {
-    // Snapshot chatId right now — don't rely on this.currentChatId later
     const chatId = this.currentChatId!;
-    console.log('[dispatch] chatId=', chatId, 'message=', messageText);
 
-    // Step 1: Save user message to MongoDB
     this.chatService.saveMessage(chatId, 'user', messageText).subscribe({
       next: () => {
-        console.log('[dispatch] user message saved');
-
-        // Step 2: Call Flask AI for reply
         this.chatService.sendMessage(messageText).subscribe({
           next: res => {
             this.isLoading = false;
             const replyText = res.reply;
-            console.log('[dispatch] Flask replied:', replyText?.substring(0, 60));
 
             const aiMessage: Message = {
               id: this.messageIdCounter++,
@@ -225,11 +183,10 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
             this.messages.push(aiMessage);
             this.cdr.detectChanges();
 
-            // Step 3: Save AI reply to MongoDB using the SAME captured chatId
-            console.log('[dispatch] saving assistant reply to chatId=', chatId);
+            // ✅ saveMessage() tap() in ChatService automatically
+            // updates sidebar title + moves chat to top
             this.chatService.saveMessage(chatId, 'assistant', replyText).subscribe({
-              next: () => console.log('[dispatch] assistant reply saved ✅'),
-              error: err => console.error('[dispatch] FAILED to save assistant reply:', err)
+              error: err => console.error('Failed to save assistant reply:', err)
             });
           },
           error: err => {
@@ -246,11 +203,9 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
             this.cdr.detectChanges();
           }
         });
-
       },
       error: err => {
-        console.error('[dispatch] FAILED to save user message:', err);
-        // Still attempt Flask call even if MongoDB save failed
+        console.error('Failed to save user message:', err);
         this.chatService.sendMessage(messageText).subscribe({
           next: res => {
             this.isLoading = false;
@@ -337,7 +292,6 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
       this.recordingStartTime = Date.now();
       this.recordingTime = '0:00';
       this.initialInputText = this.userInput;
-
       this.cdr.detectChanges();
 
       this.recognition = new SpeechRecognition();
@@ -347,7 +301,6 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
       this.recognition.onresult = (event: any) => {
         let interimTranscript = '';
         let finalTranscript = '';
-
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           if (event.results[i].isFinal) {
             finalTranscript += event.results[i][0].transcript;
@@ -355,12 +308,10 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
             interimTranscript += event.results[i][0].transcript;
           }
         }
-
         const currentTranscript = finalTranscript + interimTranscript;
         this.userInput = this.initialInputText
           ? `${this.initialInputText} ${currentTranscript}`
           : currentTranscript;
-
         this.cdr.detectChanges();
       };
 
@@ -375,7 +326,6 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
       this.analyser = this.audioContext.createAnalyser();
       this.analyser.fftSize = 64;
       this.analyser.smoothingTimeConstant = 0.8;
-
       this.microphone = this.audioContext.createMediaStreamSource(stream);
       this.microphone.connect(this.analyser);
       this.frequencyBars = Array(30).fill(20);
@@ -401,21 +351,17 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
 
   animateFrequencyBars() {
     if (!this.analyser || !this.isRecording) return;
-
     const bufferLength = this.analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
 
     const animate = () => {
       if (!this.isRecording || !this.analyser) return;
-
       this.analyser.getByteFrequencyData(dataArray);
-
       this.frequencyBars = Array(30).fill(0).map((_, index) => {
         const dataIndex = Math.floor((index / 30) * bufferLength);
         const value = dataArray[dataIndex] || 0;
         return Math.max(20, (value / 255) * 100);
       });
-
       this.cdr.detectChanges();
       this.animationFrameId = requestAnimationFrame(animate);
     };
