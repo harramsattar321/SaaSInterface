@@ -69,6 +69,11 @@ export class AuthService {
       );
   }
 
+  // Forgot password — sends a reset link to the given email
+  forgotPassword(email: string): Observable<AuthResponse> {
+    return this.http.post<AuthResponse>(`${this.apiUrl}/auth/forgot-password`, { email });
+  }
+
   // Set session
   private setSession(token: string, user: User): void {
     localStorage.setItem('token', token);

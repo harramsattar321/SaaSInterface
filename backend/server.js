@@ -1,9 +1,11 @@
-// backend/server.js - WITH CHAT STORAGE
+// backend/server.js - WITH CHAT STORAGE + FORGOT PASSWORD
 const express = require('express');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
+const nodemailer = require('nodemailer');
+const crypto = require('crypto'); // built-in Node module, no install needed
 
 const app = express();
 
@@ -16,6 +18,22 @@ app.use(cors());
 // ============================================
 const MONGODB_URI = 'mongodb+srv://bscs22f01_db_user:7oOk403ph8AGdSDm@virtualpatientsupport.75easkh.mongodb.net/patient_db?retryWrites=true&w=majority';
 const JWT_SECRET = 'your-secret-key-change-in-production-12345';
+
+// ✉️  YOUR HOSPITAL GMAIL — fill these in
+const EMAIL_USER = 'virtualpatientsupport@gmail.com';       // ← your Gmail address
+const EMAIL_PASS = 'hgll jbar sgnb vdml';           // ← 16-char App Password (spaces are fine)
+const FRONTEND_URL = 'http://localhost:4200';        // ← change to your deployed URL in production
+
+// ============================================
+// NODEMAILER TRANSPORTER
+// ============================================
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: EMAIL_USER,
+    pass: EMAIL_PASS
+  }
+});
 
 // ============================================
 // MONGODB CONNECTION
@@ -71,6 +89,15 @@ const patientSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  // Password reset fields
+  resetPasswordToken: {
+    type: String,
+    default: null
+  },
+  resetPasswordExpires: {
+    type: Date,
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -94,14 +121,14 @@ const messageSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   }
-}, { _id: false }); // No separate _id for each message (lighter)
+}, { _id: false });
 
-// --- Chat Schema (stored in 'chats' collection inside patient_db) ---
+// --- Chat Schema ---
 const chatSchema = new mongoose.Schema({
   patientId: {
     type: String,
     required: true,
-    index: true  // Fast lookup by patient
+    index: true
   },
   title: {
     type: String,
@@ -119,12 +146,11 @@ const chatSchema = new mongoose.Schema({
   }
 });
 
-// Auto-update `updatedAt` on every save
 chatSchema.pre('save', function () {
   this.updatedAt = new Date();
 });
 
-const Chat = mongoose.model('Chat', chatSchema); // → 'chats' collection
+const Chat = mongoose.model('Chat', chatSchema);
 
 // ============================================
 // HELPER: Intent-Aware Chat Title Generator
@@ -136,7 +162,6 @@ function generateChatTitle(firstUserMessage) {
 
   let msg = firstUserMessage.trim().toLowerCase();
 
-  // ── 1. Greetings & small talk ──────────────────────────────────────────
   const greetings = [
     /^(hi|hello|hey|hiya|howdy|greetings|good\s*(morning|afternoon|evening|night))[^\w]*/i,
     /^(what'?s up|how are you|how r u|how do you do)[^\w]*/i,
@@ -144,10 +169,8 @@ function generateChatTitle(firstUserMessage) {
   ];
   if (greetings.some(r => r.test(msg))) return 'General Conversation';
 
-  // ── 2. Gratitude ───────────────────────────────────────────────────────
   if (/^(thanks|thank you|thx|ty|cheers|appreciate)/i.test(msg)) return 'Follow-up';
 
-  // ── 3. Pain / symptom reports ─────────────────────────────────────────
   const painMatch = msg.match(
     /(?:i have|i feel|i am|i'm|feeling|suffering from|experiencing)\s+(?:a\s+)?([a-z\s]+(?:pain|ache|aching|fever|cough|cold|nausea|vomiting|headache|dizziness|fatigue|weakness|swelling|bleeding|rash|itching|burning|numbness|shortness of breath|chest tightness))/i
   );
@@ -155,10 +178,6 @@ function generateChatTitle(firstUserMessage) {
     return toTitleCase(painMatch[1].trim().replace(/\s+/g, ' '));
   }
 
-  // ── 4. Questions — extract the topic ──────────────────────────────────
-  // "what is diabetes" → "Diabetes"
-  // "how do I treat a fever" → "Treating a Fever"
-  // "can you explain blood pressure" → "Blood Pressure"
   const questionPatterns = [
     { re: /^(?:what|who|which)\s+(?:is|are|was|were|causes?|happens?)\s+(?:a\s+|an\s+|the\s+)?(.+?)(?:\?|$)/i, prefix: '' },
     { re: /^(?:how)\s+(?:do(?:es)?|can|should|to)\s+(?:i\s+|you\s+|we\s+)?(?:treat|manage|handle|cure|deal with|fix|prevent|stop|reduce|improve)\s+(.+?)(?:\?|$)/i, prefix: 'Treating ' },
@@ -172,13 +191,11 @@ function generateChatTitle(firstUserMessage) {
     const m = firstUserMessage.trim().match(re);
     if (m && m[1]) {
       let topic = m[1].trim().replace(/[?.!]+$/, '').trim();
-      // Strip filler endings
       topic = topic.replace(/\s*(please|for me|to me|right now|asap)$/i, '').trim();
       if (topic.length > 3) return toTitleCase(prefix + topic);
     }
   }
 
-  // ── 5. "I am / I have / I was" statements ─────────────────────────────
   const statementMatch = firstUserMessage.trim().match(
     /^(?:i am|i'm|i was|i have|i've been|i feel|i think)\s+(.+?)(?:\.|$)/i
   );
@@ -187,7 +204,6 @@ function generateChatTitle(firstUserMessage) {
     if (topic.length > 3) return toTitleCase(topic);
   }
 
-  // ── 6. Fallback — clean up and use raw message ─────────────────────────
   let title = firstUserMessage.trim();
   title = title.replace(/[*_`#>\-]+/g, '').trim();
   title = title.replace(/[.!?]+$/, '').trim();
@@ -200,7 +216,6 @@ function generateChatTitle(firstUserMessage) {
 }
 
 function toTitleCase(str) {
-  // Lowercase filler words, capitalize everything else
   const lowers = new Set(['a','an','the','and','but','or','for','nor','on','at','to','by','in','of','up','as','is','it']);
   return str
     .toLowerCase()
@@ -219,18 +234,12 @@ function authenticateToken(req, res, next) {
   const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
-    return res.status(401).json({
-      success: false,
-      message: 'Access token required'
-    });
+    return res.status(401).json({ success: false, message: 'Access token required' });
   }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
-      return res.status(403).json({
-        success: false,
-        message: 'Invalid or expired token'
-      });
+      return res.status(403).json({ success: false, message: 'Invalid or expired token' });
     }
     req.user = user;
     next();
@@ -241,7 +250,6 @@ function authenticateToken(req, res, next) {
 // ROUTES — AUTH
 // ============================================
 
-// Test Route
 app.get('/', (req, res) => {
   res.json({ message: 'Hospital Backend API is running!' });
 });
@@ -253,32 +261,18 @@ app.post('/api/auth/signup', async (req, res) => {
     console.log('📝 Signup attempt:', { firstName, lastName, email, phoneNumber });
 
     if (!firstName || !lastName || !email || !password || !phoneNumber) {
-      return res.status(400).json({
-        success: false,
-        message: 'All fields are required'
-      });
+      return res.status(400).json({ success: false, message: 'All fields are required' });
     }
 
     const existingPatient = await Patient.findOne({ email }).lean().exec();
     if (existingPatient) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email already registered'
-      });
+      return res.status(400).json({ success: false, message: 'Email already registered' });
     }
 
     const userId = 'PAT' + Date.now() + Math.floor(Math.random() * 1000);
     const hashedPassword = await bcrypt.hash(password, 8);
 
-    const newPatient = new Patient({
-      userId,
-      firstName,
-      lastName,
-      email,
-      password: hashedPassword,
-      phoneNumber
-    });
-
+    const newPatient = new Patient({ userId, firstName, lastName, email, password: hashedPassword, phoneNumber });
     await newPatient.save();
     console.log('✅ User created:', userId);
 
@@ -303,10 +297,7 @@ app.post('/api/auth/signup', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Signup error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error during signup: ' + error.message
-    });
+    res.status(500).json({ success: false, message: 'Server error during signup: ' + error.message });
   }
 });
 
@@ -318,10 +309,7 @@ app.post('/api/auth/login', async (req, res) => {
     console.log('🔐 Login attempt:', email);
 
     if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email and password are required'
-      });
+      return res.status(400).json({ success: false, message: 'Email and password are required' });
     }
 
     const patient = await Patient.findOne({ email })
@@ -330,23 +318,13 @@ app.post('/api/auth/login', async (req, res) => {
       .exec();
 
     if (!patient) {
-      console.log('❌ User not found:', email);
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or password'
-      });
+      return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 
     const isPasswordValid = await bcrypt.compare(password, patient.password);
     if (!isPasswordValid) {
-      console.log('❌ Invalid password for:', email);
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or password'
-      });
+      return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
-
-    console.log('✅ Login successful:', patient.userId);
 
     const token = jwt.sign(
       { userId: patient.userId, email: patient.email },
@@ -370,11 +348,119 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (error) {
     console.error('❌ Login error:', error);
     if (!res.headersSent) {
-      return res.status(500).json({
+      return res.status(500).json({ success: false, message: 'Server error during login' });
+    }
+  }
+});
+
+// ============================================
+// FORGOT PASSWORD
+// ============================================
+
+// STEP 1 — Request reset link
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+
+    const patient = await Patient.findOne({ email: email.toLowerCase().trim() });
+
+    // Always respond with success — never reveal if the email exists (security)
+    const genericResponse = {
+      success: true,
+      message: 'If an account with that email exists, a reset link has been sent.'
+    };
+
+    if (!patient) {
+      console.log(`⚠️  Forgot password: email not found (${email})`);
+      return res.status(200).json(genericResponse);
+    }
+
+    // Generate a secure random token valid for 1 hour
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
+
+    patient.resetPasswordToken = resetToken;
+    patient.resetPasswordExpires = resetExpires;
+    await patient.save();
+
+    const resetLink = `${FRONTEND_URL}/reset-password?token=${resetToken}`;
+
+    // Send the email
+    await transporter.sendMail({
+      from: `"Virtual Patient Support" <${EMAIL_USER}>`,
+      to: patient.email,
+      subject: 'Password Reset Request',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 480px; margin: auto; padding: 30px; border: 1px solid #c7d9ff; border-radius: 12px;">
+          <h2 style="color: #0d3b66;">Password Reset</h2>
+          <p style="color: #333;">Hi ${patient.firstName},</p>
+          <p style="color: #333;">We received a request to reset your password. Click the button below to set a new password. This link expires in <strong>1 hour</strong>.</p>
+          <a href="${resetLink}"
+             style="display:inline-block; margin: 20px 0; padding: 12px 28px; background:#0d3b66; color:white; border-radius:8px; text-decoration:none; font-weight:bold;">
+            Reset My Password
+          </a>
+          <p style="color: #888; font-size: 13px;">If you didn't request this, you can safely ignore this email. Your password will not change.</p>
+          <hr style="border:none; border-top:1px solid #eee; margin-top:24px;">
+          <p style="color: #aaa; font-size: 12px;">Virtual Patient Support System</p>
+        </div>
+      `
+    });
+
+    console.log(`✉️  Password reset email sent to: ${patient.email}`);
+    return res.status(200).json(genericResponse);
+
+  } catch (error) {
+    console.error('❌ Forgot password error:', error);
+    res.status(500).json({ success: false, message: 'Server error. Please try again later.' });
+  }
+});
+
+// STEP 2 — Reset password using the token
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Token and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+    }
+
+    // Find patient with a valid, non-expired token
+    const patient = await Patient.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: new Date() } // token must not be expired
+    });
+
+    if (!patient) {
+      return res.status(400).json({
         success: false,
-        message: 'Server error during login'
+        message: 'Reset link is invalid or has expired. Please request a new one.'
       });
     }
+
+    // Hash new password and clear the reset token
+    patient.password = await bcrypt.hash(newPassword, 8);
+    patient.resetPasswordToken = null;
+    patient.resetPasswordExpires = null;
+    await patient.save();
+
+    console.log(`✅ Password reset successful for: ${patient.email}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Password reset successfully. You can now log in with your new password.'
+    });
+
+  } catch (error) {
+    console.error('❌ Reset password error:', error);
+    res.status(500).json({ success: false, message: 'Server error. Please try again later.' });
   }
 });
 
@@ -382,7 +468,6 @@ app.post('/api/auth/login', async (req, res) => {
 // ROUTES — USER PROFILE
 // ============================================
 
-// Get Profile
 app.get('/api/user/profile', authenticateToken, async (req, res) => {
   try {
     const patient = await Patient.findOne({ userId: req.user.userId })
@@ -391,10 +476,7 @@ app.get('/api/user/profile', authenticateToken, async (req, res) => {
       .exec();
 
     if (!patient) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
 
     res.status(200).json({ success: true, user: patient });
@@ -405,7 +487,6 @@ app.get('/api/user/profile', authenticateToken, async (req, res) => {
   }
 });
 
-// Update Profile
 app.put('/api/user/update', authenticateToken, async (req, res) => {
   try {
     const { firstName, lastName, phoneNumber } = req.body;
@@ -434,16 +515,9 @@ app.put('/api/user/update', authenticateToken, async (req, res) => {
 // ROUTES — CHATS  (all protected)
 // ============================================
 
-// POST /api/chats/new
-// Create a brand new chat session (empty, titled "New Chat")
 app.post('/api/chats/new', authenticateToken, async (req, res) => {
   try {
-    const chat = new Chat({
-      patientId: req.user.userId,
-      title: 'New Chat',
-      messages: []
-    });
-
+    const chat = new Chat({ patientId: req.user.userId, title: 'New Chat', messages: [] });
     await chat.save();
     console.log(`💬 New chat created: ${chat._id} for patient: ${req.user.userId}`);
 
@@ -466,44 +540,30 @@ app.post('/api/chats/new', authenticateToken, async (req, res) => {
   }
 });
 
-// POST /api/chats/:chatId/message
-// Append a message to a chat. If it's the FIRST user message → auto-generate title.
 app.post('/api/chats/:chatId/message', authenticateToken, async (req, res) => {
   try {
     const { role, content } = req.body;
     const { chatId } = req.params;
 
     if (!role || !content) {
-      return res.status(400).json({
-        success: false,
-        message: 'role and content are required'
-      });
+      return res.status(400).json({ success: false, message: 'role and content are required' });
     }
 
     if (!['user', 'assistant'].includes(role)) {
-      return res.status(400).json({
-        success: false,
-        message: 'role must be "user" or "assistant"'
-      });
+      return res.status(400).json({ success: false, message: 'role must be "user" or "assistant"' });
     }
 
-    // Find the chat and make sure it belongs to this patient
     const chat = await Chat.findOne({ _id: chatId, patientId: req.user.userId });
 
     if (!chat) {
-      return res.status(404).json({
-        success: false,
-        message: 'Chat not found or access denied'
-      });
+      return res.status(404).json({ success: false, message: 'Chat not found or access denied' });
     }
 
-    // Auto-generate title from FIRST user message if still "New Chat"
     if (role === 'user' && chat.title === 'New Chat' && chat.messages.length === 0) {
       chat.title = generateChatTitle(content);
       console.log(`✏️  Auto-title set: "${chat.title}"`);
     }
 
-    // Append the new message
     chat.messages.push({ role, content });
     await chat.save();
 
@@ -525,13 +585,11 @@ app.post('/api/chats/:chatId/message', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/chats
-// Get all chat sessions for the logged-in patient (titles only, no messages — for sidebar)
 app.get('/api/chats', authenticateToken, async (req, res) => {
   try {
     const chats = await Chat.find({ patientId: req.user.userId })
-      .select('_id title createdAt updatedAt')  // No messages — keep it light
-      .sort({ updatedAt: -1 })                   // Most recent first
+      .select('_id title createdAt updatedAt')
+      .sort({ updatedAt: -1 })
       .lean()
       .exec();
 
@@ -551,20 +609,12 @@ app.get('/api/chats', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/chats/:chatId
-// Get a single chat with full message history
 app.get('/api/chats/:chatId', authenticateToken, async (req, res) => {
   try {
-    const chat = await Chat.findOne({
-      _id: req.params.chatId,
-      patientId: req.user.userId
-    }).lean().exec();
+    const chat = await Chat.findOne({ _id: req.params.chatId, patientId: req.user.userId }).lean().exec();
 
     if (!chat) {
-      return res.status(404).json({
-        success: false,
-        message: 'Chat not found or access denied'
-      });
+      return res.status(404).json({ success: false, message: 'Chat not found or access denied' });
     }
 
     res.status(200).json({
@@ -585,8 +635,6 @@ app.get('/api/chats/:chatId', authenticateToken, async (req, res) => {
   }
 });
 
-// PUT /api/chats/:chatId/rename
-// Manually rename a chat
 app.put('/api/chats/:chatId/rename', authenticateToken, async (req, res) => {
   try {
     const { title } = req.body;
@@ -619,21 +667,15 @@ app.put('/api/chats/:chatId/rename', authenticateToken, async (req, res) => {
   }
 });
 
-// DELETE /api/chats/:chatId
-// Delete a chat session entirely
 app.delete('/api/chats/:chatId', authenticateToken, async (req, res) => {
   try {
-    const result = await Chat.findOneAndDelete({
-      _id: req.params.chatId,
-      patientId: req.user.userId
-    });
+    const result = await Chat.findOneAndDelete({ _id: req.params.chatId, patientId: req.user.userId });
 
     if (!result) {
       return res.status(404).json({ success: false, message: 'Chat not found or access denied' });
     }
 
     console.log(`🗑️  Chat deleted: ${req.params.chatId}`);
-
     res.status(200).json({ success: true, message: 'Chat deleted successfully' });
 
   } catch (error) {
@@ -651,14 +693,16 @@ app.listen(PORT, () => {
   console.log(`\n   AUTH ROUTES:`);
   console.log(`   POST  /api/auth/signup`);
   console.log(`   POST  /api/auth/login`);
+  console.log(`   POST  /api/auth/forgot-password`);
+  console.log(`   POST  /api/auth/reset-password`);
   console.log(`\n   USER ROUTES (protected):`);
   console.log(`   GET   /api/user/profile`);
   console.log(`   PUT   /api/user/update`);
   console.log(`\n   CHAT ROUTES (protected):`);
-  console.log(`   POST  /api/chats/new              → Create new chat`);
-  console.log(`   POST  /api/chats/:chatId/message  → Add message (auto-titles on 1st msg)`);
-  console.log(`   GET   /api/chats                  → List all chats (sidebar)`);
-  console.log(`   GET   /api/chats/:chatId           → Full chat with messages`);
-  console.log(`   PUT   /api/chats/:chatId/rename    → Rename a chat`);
-  console.log(`   DELETE /api/chats/:chatId          → Delete a chat`);
+  console.log(`   POST  /api/chats/new`);
+  console.log(`   POST  /api/chats/:chatId/message`);
+  console.log(`   GET   /api/chats`);
+  console.log(`   GET   /api/chats/:chatId`);
+  console.log(`   PUT   /api/chats/:chatId/rename`);
+  console.log(`   DELETE /api/chats/:chatId`);
 });

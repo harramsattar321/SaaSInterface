@@ -4,7 +4,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #e8f1ff; /* soft blue */
+  background: #e8f1ff;
   padding: 20px;
 }
 
@@ -20,17 +20,16 @@
   border: 1px solid #0D3B66;
 }
 
-/* Text: blue + dark navy */
 .title {
   font-size: 28px;
   font-weight: 700;
-  color: #0d3b66; /* deep blue */
+  color: #0d3b66;
   margin-bottom: 6px;
 }
 
 .subtitle {
   font-size: 14px;
-  color: #0D3B66; /* medium blue */
+  color: #0D3B66;
   margin-bottom: 25px;
 }
 
@@ -73,13 +72,30 @@
   font-size: 14px;
   margin-bottom: 15px;
   border: 1px solid #ffb3b3;
+  text-align: left;
 }
 
-/* Button: Blue */
+/* Success box */
+.success-box {
+  background: #e8f5e9;
+  color: #2e7d32;
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 15px;
+  border: 1px solid #a5d6a7;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  text-align: left;
+  line-height: 1.5;
+}
+
+/* Button */
 .btn-login {
   width: 100%;
   padding: 12px;
-  background: #0D3B66; /* solid blue */
+  background: #0D3B66;
   border: none;
   color: white;
   font-weight: 700;
@@ -90,12 +106,55 @@
 }
 
 .btn-login:hover:not(:disabled) {
-  background: #0D3B66;
+  background: #0a2f54;
 }
 
 .btn-login:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* Forgot password link */
+.forgot-link-wrapper {
+  text-align: right;
+  margin-bottom: 16px;
+  margin-right: 30px;
+}
+
+.forgot-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0D3B66;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.forgot-link:hover {
+  color: #0a2f54;
+}
+
+/* Back button */
+.back-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0D3B66;
+  cursor: pointer;
+  display: block;
+  margin-bottom: 20px;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.back-btn:hover {
+  color: #0a2f54;
 }
 
 /* Signup text */
