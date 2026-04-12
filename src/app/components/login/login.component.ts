@@ -1,7 +1,8 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule, ActivatedRoute } from '@angular/router';
+import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../../services/auth.service';
 
 @Component({
@@ -17,7 +18,7 @@ export class LoginComponent implements OnInit {
   password = '';
   loading = false;
   errorMessage = '';
-  resetSuccessMessage = ''; // shown when redirected back after password reset
+  resetSuccessMessage = '';
 
   // --- Forgot password fields ---
   showForgotPassword = false;
@@ -28,19 +29,20 @@ export class LoginComponent implements OnInit {
 
   private readonly LOGIN_TIMEOUT = 1000;
   private timeoutHandle: any;
+  private readonly apiUrl = 'http://localhost:3000/api';
 
   constructor(
     private authService: AuthService,
+    private http: HttpClient,
     private router: Router,
-    private route: ActivatedRoute
+    private route: ActivatedRoute,
+    private ngZone: NgZone   // ← forces Angular to detect changes
   ) {}
 
   ngOnInit() {
-    // Show success banner if redirected here after a password reset
     const resetDone = this.route.snapshot.queryParamMap.get('reset');
     if (resetDone === 'success') {
       this.resetSuccessMessage = 'Password reset successfully! Please log in with your new password.';
-      // Remove the query param from the URL without reloading
       this.router.navigate([], {
         queryParams: { reset: null },
         queryParamsHandling: 'merge',
@@ -57,13 +59,11 @@ export class LoginComponent implements OnInit {
       this.errorMessage = 'Please fill in all fields';
       return;
     }
-
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(this.email)) {
       this.errorMessage = 'Please enter a valid email';
       return;
     }
-
     this.loading = true;
     this.errorMessage = '';
     this.resetSuccessMessage = '';
@@ -79,7 +79,6 @@ export class LoginComponent implements OnInit {
       next: (response: any) => {
         clearTimeout(this.timeoutHandle);
         this.loading = false;
-
         if (response.success) {
           this.email = '';
           this.password = '';
@@ -91,20 +90,15 @@ export class LoginComponent implements OnInit {
       error: (error: any) => {
         clearTimeout(this.timeoutHandle);
         this.loading = false;
-
         if (error.error?.message) {
           this.errorMessage = error.error.message;
         } else if (error.status === 401 || error.status === 403) {
           this.errorMessage = 'Invalid email or password';
         } else if (error.status === 0) {
-          this.errorMessage = 'Unable to connect to server. Please check your internet connection.';
-        } else if (error.status === 500) {
-          this.errorMessage = 'Server error. Please try again later.';
+          this.errorMessage = 'Unable to connect to server.';
         } else {
           this.errorMessage = 'Invalid email or password';
         }
-
-        console.error('Login error:', error);
       }
     });
   }
@@ -140,40 +134,45 @@ export class LoginComponent implements OnInit {
       this.forgotErrorMessage = 'Please enter your email address';
       return;
     }
-
     if (!emailRegex.test(this.forgotEmail)) {
       this.forgotErrorMessage = 'Please enter a valid email address';
       return;
     }
 
+    console.log('🚀 STEP 1: Setting forgotLoading = true');
     this.forgotLoading = true;
     this.forgotErrorMessage = '';
     this.forgotSuccessMessage = '';
 
-    this.authService.forgotPassword(this.forgotEmail).subscribe({
-      next: (response: any) => {
-        this.forgotLoading = false;
-        this.forgotSuccessMessage =
-          'Reset link sent! Please check your inbox (and spam folder).';
-        this.forgotEmail = '';
-      },
-      error: (error: any) => {
-        this.forgotLoading = false;
-
-        if (error.status === 0) {
+    // Use native fetch() as a completely independent test
+    // This bypasses Angular's HttpClient entirely
+    fetch(`${this.apiUrl}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: this.forgotEmail })
+    })
+      .then(res => {
+        console.log('🚀 STEP 2: Got response, status =', res.status);
+        return res.json();
+      })
+      .then(data => {
+        console.log('🚀 STEP 3: Response data =', data);
+        // Run inside NgZone so Angular picks up the state change
+        this.ngZone.run(() => {
+          console.log('🚀 STEP 4: Inside NgZone — setting loading=false, showing success');
+          this.forgotLoading = false;
+          this.forgotSuccessMessage = 'Reset link sent! Please check your inbox (and spam folder).';
+          this.forgotEmail = '';
+          console.log('🚀 STEP 5: forgotLoading =', this.forgotLoading, '| forgotSuccessMessage =', this.forgotSuccessMessage);
+        });
+      })
+      .catch(err => {
+        console.error('🚀 STEP 2 ERROR:', err);
+        this.ngZone.run(() => {
+          this.forgotLoading = false;
           this.forgotErrorMessage = 'Unable to connect to server. Please check your internet connection.';
-        } else if (error.status === 500) {
-          this.forgotErrorMessage = 'Server error. Please try again later.';
-        } else if (error.status === 429) {
-          this.forgotErrorMessage = 'Too many requests. Please wait a moment before trying again.';
-        } else {
-          this.forgotSuccessMessage =
-            'Reset link sent! Please check your inbox (and spam folder).';
-        }
-
-        console.error('Forgot password error:', error);
-      }
-    });
+        });
+      });
   }
 
   onForgotInputChange() {
