@@ -1,4 +1,4 @@
-import { Component, OnInit, NgZone } from '@angular/core';
+import { Component, OnInit, NgZone, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule, ActivatedRoute } from '@angular/router';
@@ -36,7 +36,8 @@ export class LoginComponent implements OnInit {
     private http: HttpClient,
     private router: Router,
     private route: ActivatedRoute,
-    private ngZone: NgZone   // ← forces Angular to detect changes
+    private ngZone: NgZone,
+    private cdr: ChangeDetectorRef   // ← forces Angular to re-render the template
   ) {}
 
   ngOnInit() {
@@ -129,7 +130,6 @@ export class LoginComponent implements OnInit {
 
   onForgotPassword() {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
     if (!this.forgotEmail) {
       this.forgotErrorMessage = 'Please enter your email address';
       return;
@@ -139,38 +139,29 @@ export class LoginComponent implements OnInit {
       return;
     }
 
-    console.log('🚀 STEP 1: Setting forgotLoading = true');
     this.forgotLoading = true;
     this.forgotErrorMessage = '';
     this.forgotSuccessMessage = '';
 
-    // Use native fetch() as a completely independent test
-    // This bypasses Angular's HttpClient entirely
     fetch(`${this.apiUrl}/auth/forgot-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: this.forgotEmail })
     })
-      .then(res => {
-        console.log('🚀 STEP 2: Got response, status =', res.status);
-        return res.json();
-      })
-      .then(data => {
-        console.log('🚀 STEP 3: Response data =', data);
-        // Run inside NgZone so Angular picks up the state change
+      .then(res => res.json())
+      .then(() => {
         this.ngZone.run(() => {
-          console.log('🚀 STEP 4: Inside NgZone — setting loading=false, showing success');
           this.forgotLoading = false;
           this.forgotSuccessMessage = 'Reset link sent! Please check your inbox (and spam folder).';
           this.forgotEmail = '';
-          console.log('🚀 STEP 5: forgotLoading =', this.forgotLoading, '| forgotSuccessMessage =', this.forgotSuccessMessage);
+          this.cdr.detectChanges(); // ← force the template to re-render right now
         });
       })
-      .catch(err => {
-        console.error('🚀 STEP 2 ERROR:', err);
+      .catch(() => {
         this.ngZone.run(() => {
           this.forgotLoading = false;
-          this.forgotErrorMessage = 'Unable to connect to server. Please check your internet connection.';
+          this.forgotErrorMessage = 'Unable to connect to server. Please check your connection.';
+          this.cdr.detectChanges(); // ← same here
         });
       });
   }
