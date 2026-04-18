@@ -23,7 +23,7 @@ export class ResetPasswordComponent implements OnInit {
   showNew = false;
   showConfirm = false;
 
-  private apiUrl = 'http://localhost:3000/api';
+  private apiUrl = 'http://localhost:8000/api';
 
   constructor(
     private route: ActivatedRoute,

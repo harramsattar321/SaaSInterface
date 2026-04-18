@@ -1,0 +1,198 @@
+<div class="booking-page">
+
+    <div class="page-header">
+      <h1>Book an Appointment</h1>
+      <p class="subtitle">Select a doctor, choose a date, and pick an available time slot</p>
+    </div>
+  
+    <!-- Success Banner -->
+    <div class="success-banner" *ngIf="bookingSuccess">
+      <div class="success-icon">&#10003;</div>
+      <div class="success-text">
+        <strong>Appointment booked successfully!</strong>
+        <span>You will be notified once the doctor confirms your appointment.</span>
+      </div>
+      <button class="dismiss-btn" (click)="dismissSuccess()">&#10005;</button>
+    </div>
+  
+    <!-- Error Banner -->
+    <div class="error-banner" *ngIf="bookingError">
+      <span>{{ bookingError }}</span>
+      <button class="dismiss-btn" (click)="bookingError = ''">&#10005;</button>
+    </div>
+  
+    <div class="booking-layout">
+  
+      <!-- LEFT: Form -->
+      <div class="form-panel">
+  
+        <!-- Step 1: Select Doctor -->
+        <div class="form-section">
+          <div class="step-label">
+            <span class="step-num">1</span>
+            <span>Select a Doctor</span>
+          </div>
+  
+          <div class="loading-row" *ngIf="isLoadingDoctors">
+            <div class="spinner"></div>
+            <span>Loading doctors...</span>
+          </div>
+  
+          <select
+            *ngIf="!isLoadingDoctors"
+            class="form-select"
+            (change)="onDoctorSelect($event)"
+            [value]="selectedDoctor?.id || ''">
+            <option value="" disabled selected>-- Choose a doctor --</option>
+            <option *ngFor="let doctor of doctors" [value]="doctor.id">
+              {{ doctor.name }} — {{ doctor.specialty }}
+            </option>
+          </select>
+        </div>
+  
+        <!-- Doctor Card (shown after selection) -->
+        <div class="doctor-card" *ngIf="selectedDoctor">
+          <img [src]="selectedDoctor.image" [alt]="selectedDoctor.name" class="doctor-img" />
+          <div class="doctor-info">
+            <h3>{{ selectedDoctor.name }}</h3>
+            <p class="doctor-specialty">{{ selectedDoctor.specialty }}</p>
+            <p class="doctor-bio">{{ selectedDoctor.shortBio }}</p>
+            <div class="doctor-meta">
+              <span class="meta-pill">{{ selectedDoctor.experience }}</span>
+              <span class="meta-pill fee">{{ selectedDoctor.consultationFee }}</span>
+            </div>
+            <div class="available-days">
+              <span class="days-label">Available on:</span>
+              <span
+                *ngFor="let day of selectedDoctor.availableDays"
+                class="day-pill">
+                {{ day }}
+              </span>
+            </div>
+          </div>
+        </div>
+  
+        <!-- Step 2: Select Date -->
+        <div class="form-section" *ngIf="selectedDoctor">
+          <div class="step-label">
+            <span class="step-num">2</span>
+            <span>Choose a Date</span>
+          </div>
+          <input
+            type="date"
+            class="form-input"
+            [(ngModel)]="selectedDate"
+            [min]="minDate"
+            (change)="onDateChange()"
+          />
+          <p class="hint" *ngIf="selectedDate && !slotError">
+            Showing slots for <strong>{{ getFormattedDate() }}</strong>
+          </p>
+          <p class="slot-error" *ngIf="slotError">{{ slotError }}</p>
+        </div>
+  
+        <!-- Step 3: Select Time Slot -->
+        <div class="form-section" *ngIf="selectedDate && !slotError">
+          <div class="step-label">
+            <span class="step-num">3</span>
+            <span>Pick a Time Slot</span>
+          </div>
+  
+          <div class="loading-row" *ngIf="isLoadingSlots">
+            <div class="spinner"></div>
+            <span>Checking availability...</span>
+          </div>
+  
+          <div *ngIf="!isLoadingSlots">
+            <div class="slots-grid" *ngIf="availableSlots.length > 0">
+              <button
+                *ngFor="let slot of availableSlots"
+                class="slot-btn"
+                [class.selected]="isSlotSelected(slot)"
+                (click)="onSlotSelect(slot)">
+                {{ slot }}
+              </button>
+            </div>
+            <p class="no-slots" *ngIf="availableSlots.length === 0 && selectedDate">
+              No available slots for this date. All slots are booked. Please try another date.
+            </p>
+          </div>
+        </div>
+  
+        <!-- Submit -->
+        <div class="form-section submit-section" *ngIf="selectedSlot">
+          <div class="booking-summary">
+            <h4>Booking Summary</h4>
+            <div class="summary-row">
+              <span class="summary-label">Doctor</span>
+              <span class="summary-value">{{ selectedDoctor?.name }}</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">Date</span>
+              <span class="summary-value">{{ getFormattedDate() }}</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">Time</span>
+              <span class="summary-value highlight">{{ selectedSlot }}</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">Fee</span>
+              <span class="summary-value">{{ selectedDoctor?.consultationFee }}</span>
+            </div>
+          </div>
+  
+          <button
+            class="book-btn"
+            (click)="submitAppointment()"
+            [disabled]="!isFormValid || isSubmitting">
+            <span *ngIf="!isSubmitting">Confirm Appointment</span>
+            <span *ngIf="isSubmitting" class="btn-loading">
+              <span class="spinner-sm"></span> Booking...
+            </span>
+          </button>
+        </div>
+  
+      </div>
+  
+      <!-- RIGHT: Info Panel -->
+      <div class="info-panel">
+        <div class="info-card">
+          <h4>How it works</h4>
+          <div class="step-item">
+            <div class="circle-num">1</div>
+            <div>
+              <strong>Choose your doctor</strong>
+              <p>Browse specialists and select the one that fits your needs.</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="circle-num">2</div>
+            <div>
+              <strong>Pick a date</strong>
+              <p>Only dates when the doctor is available will show time slots.</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="circle-num">3</div>
+            <div>
+              <strong>Select a slot</strong>
+              <p>Each appointment is 15 minutes. Booked slots are hidden automatically.</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="circle-num">4</div>
+            <div>
+              <strong>Confirm</strong>
+              <p>Your appointment status starts as pending until the doctor approves it.</p>
+            </div>
+          </div>
+        </div>
+  
+        <div class="info-card notice-card" *ngIf="!patientId">
+          <span class="notice-icon">&#9888;</span>
+          <p>You must be logged in as a patient to book an appointment.</p>
+        </div>
+      </div>
+  
+    </div>
+  </div>

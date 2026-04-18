@@ -23,7 +23,7 @@ export interface ChatDetail extends ChatSession {
 
 @Injectable({ providedIn: 'root' })
 export class ChatService {
-  private nodeUrl = 'http://localhost:3000';   // Node/Express backend
+  private nodeUrl = 'http://localhost:8000';   // Node/Express backend
   private flaskUrl = 'http://localhost:5000';  // Flask AI backend
 
   // ─── Active chat state shared across components ───────────────────────────
