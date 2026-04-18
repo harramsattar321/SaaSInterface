@@ -1,0 +1,293 @@
+<!-- patient-dashboard.html -->
+<div class="dashboard-shell">
+
+  @if (isLoading) {
+    <div class="loading-screen">
+      <div class="pulse-ring"></div>
+      <p>Loading your dashboard…</p>
+    </div>
+  }
+
+  @if (errorMessage && !isLoading) {
+    <div class="error-banner">
+      <span>⚠</span> {{ errorMessage }}
+      <button (click)="loadDashboard()">Retry</button>
+    </div>
+  }
+
+  @if (!isLoading && !errorMessage) {
+
+    <!-- ══ HEADER ══ -->
+    <header class="dash-header">
+      <div class="header-left">
+        <div class="greeting-pill">Welcome</div>
+        <h1 class="welcome-name">{{ patientFirstName }} {{ patientLastName }}</h1>
+        <p class="header-sub">Here's everything about your care at a glance.</p>
+      </div>
+      <div class="header-actions">
+        <button class="action-btn primary" (click)="goToBookAppointment()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="18" rx="2"/>
+            <line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+            <line x1="12" y1="14" x2="12" y2="18"/>
+            <line x1="10" y1="16" x2="14" y2="16"/>
+          </svg>
+          Book appointment
+        </button>
+        <button class="action-btn secondary" (click)="goToChat()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          Chat with AI
+        </button>
+      </div>
+    </header>
+
+    <!-- ══ NEXT APPOINTMENT HERO ══ -->
+    @if (nextAppointment) {
+      <section class="next-appt-section">
+        <div class="next-card">
+          <div class="next-card-left">
+            <div class="next-badge">Next appointment</div>
+            <h2 class="next-doctor-name">{{ nextAppointment.doctor?.name || 'Doctor' }}</h2>
+            <p class="next-specialty">{{ nextAppointment.doctor?.specialty }}</p>
+            <div class="next-meta">
+              <span class="meta-chip">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                  <rect x="3" y="4" width="18" height="18" rx="2"/>
+                  <line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                {{ formatDate(nextAppointment.appointmentDate) }}
+              </span>
+              <span class="meta-chip">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                  <circle cx="12" cy="12" r="10"/>
+                  <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                {{ nextAppointment.time }}
+              </span>
+              <span class="meta-chip priority-chip" [ngClass]="priorityClass(nextAppointment.priority)">
+                {{ nextAppointment.priority | titlecase }} priority
+              </span>
+            </div>
+            <div class="next-actions">
+              <button class="mini-btn danger" (click)="confirmCancel(nextAppointment)">Cancel appointment</button>
+              <button class="mini-btn accent" (click)="openReschedule(nextAppointment)">Reschedule</button>
+            </div>
+          </div>
+
+          <div class="countdown-block">
+            <p class="countdown-label">Appointment in</p>
+            <div class="countdown-grid">
+              <div class="tick-unit">
+                <span class="tick-num">{{ pad(countdown.days) }}</span>
+                <span class="tick-lbl">Days</span>
+              </div>
+              <span class="tick-sep">:</span>
+              <div class="tick-unit">
+                <span class="tick-num">{{ pad(countdown.hours) }}</span>
+                <span class="tick-lbl">Hrs</span>
+              </div>
+              <span class="tick-sep">:</span>
+              <div class="tick-unit">
+                <span class="tick-num">{{ pad(countdown.minutes) }}</span>
+                <span class="tick-lbl">Min</span>
+              </div>
+              <span class="tick-sep">:</span>
+              <div class="tick-unit">
+                <span class="tick-num">{{ pad(countdown.seconds) }}</span>
+                <span class="tick-lbl">Sec</span>
+              </div>
+            </div>
+            @if (nextAppointment.doctor?.image) {
+              <img
+                class="doc-avatar"
+                [src]="nextAppointment.doctor!.image"
+                [alt]="nextAppointment.doctor!.name"
+              />
+            }
+          </div>
+        </div>
+      </section>
+    }
+
+    @if (!nextAppointment) {
+      <section class="no-next-banner">
+        <div class="no-next-inner">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="36" height="36">
+            <rect x="3" y="4" width="18" height="18" rx="2"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+          <p>You have no upcoming appointments.</p>
+          <button class="action-btn primary" (click)="goToBookAppointment()">Book one now</button>
+        </div>
+      </section>
+    }
+
+    <!-- ══ STATS ══ -->
+    <section class="stats-strip">
+      <div class="stat-card">
+        <span class="stat-num">{{ appointments.length }}</span>
+        <span class="stat-label">Total visits</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-num">{{ appointments | filterStatus:'pending' }}</span>
+        <span class="stat-label">Upcoming</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-num">{{ appointments | filterStatus:'completed' }}</span>
+        <span class="stat-label">Completed</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-num">{{ appointments | filterStatus:'cancelled' }}</span>
+        <span class="stat-label">Cancelled</span>
+      </div>
+    </section>
+
+    <!-- ══ APPOINTMENTS LIST ══ -->
+    <section class="appt-list-section">
+      <div class="list-header">
+        <h2 class="section-title">Your appointments</h2>
+        <div class="filter-tabs">
+          <button [class.active]="activeFilter==='all'"       (click)="activeFilter='all'">All</button>
+          <button [class.active]="activeFilter==='upcoming'"  (click)="activeFilter='upcoming'">Upcoming</button>
+          <button [class.active]="activeFilter==='past'"      (click)="activeFilter='past'">Past</button>
+          <button [class.active]="activeFilter==='cancelled'" (click)="activeFilter='cancelled'">Cancelled</button>
+        </div>
+      </div>
+
+      @if (filteredAppointments.length === 0) {
+        <div class="appt-empty">
+          <p>No appointments in this category.</p>
+        </div>
+      }
+
+      <div class="appt-list">
+        @for (appt of filteredAppointments; track appt.id) {
+          <div class="appt-card" [class.is-next]="appt.isNext" [class.is-past]="appt.isPast">
+
+            <div class="appt-avatar-wrap">
+              @if (appt.doctor?.image) {
+                <img class="appt-avatar" [src]="appt.doctor!.image" [alt]="appt.doctor!.name" />
+              } @else {
+                <div class="appt-avatar-placeholder">
+                  {{ appt.doctor?.name?.charAt(0) || '?' }}
+                </div>
+              }
+            </div>
+
+            <div class="appt-info">
+              <div class="appt-top-row">
+                <span class="appt-doctor">{{ appt.doctor?.name || 'Unknown Doctor' }}</span>
+                <span class="status-badge" [ngClass]="statusClass(appt.status)">{{ appt.statusLabel }}</span>
+              </div>
+              <span class="appt-specialty">{{ appt.doctor?.specialty }}</span>
+              <div class="appt-details-row">
+                <span class="appt-detail">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+                    <rect x="3" y="4" width="18" height="18" rx="2"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                  </svg>
+                  {{ formatDate(appt.appointmentDate) }}
+                </span>
+                <span class="appt-detail">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                  </svg>
+                  {{ appt.time }}
+                </span>
+                <span class="appt-priority" [ngClass]="priorityPClass(appt.priority)">
+                  {{ appt.priority | titlecase }}
+                </span>
+              </div>
+            </div>
+
+            @if (!appt.isPast && appt.status !== 'cancelled') {
+              <div class="appt-card-actions">
+                <button class="text-btn cancel-btn" (click)="confirmCancel(appt)">Cancel</button>
+                <button class="text-btn" (click)="openReschedule(appt)">Reschedule</button>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </section>
+
+  }
+</div>
+
+<!-- ══ RESCHEDULE MODAL ══ -->
+@if (showRescheduleModal) {
+  <div class="modal-backdrop" (click)="closeModal()">
+    <div class="modal-box" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Reschedule appointment</h3>
+        <button class="modal-close" (click)="closeModal()">Close</button>
+      </div>
+
+      @if (rescheduleSuccess) {
+        <div class="reschedule-success">
+          <div class="success-icon">✓</div>
+          <p>Appointment rescheduled successfully.</p>
+        </div>
+      }
+
+      @if (!rescheduleSuccess) {
+        <p class="modal-sub">
+          Pick a new time for your appointment with
+          <strong>{{ rescheduleTarget?.doctor?.name }}</strong>.
+        </p>
+
+        @if (availableSlots.length > 0) {
+          <div class="slots-container">
+            @for (slot of availableSlots; track slot.date + slot.time) {
+              <div class="slot-pill" [class.selected]="selectedSlot === slot" (click)="selectedSlot = slot">
+                {{ slot.display }}
+              </div>
+            }
+          </div>
+        } @else {
+          <p class="no-slots-msg">No available slots in the next 14 days.</p>
+        }
+
+        <div class="modal-footer">
+          <button class="modal-btn cancel-modal-btn" (click)="closeModal()">Go back</button>
+          <button
+            class="modal-btn confirm-modal-btn"
+            [disabled]="!selectedSlot || rescheduleLoading"
+            (click)="confirmReschedule()"
+          >
+            {{ rescheduleLoading ? 'Saving…' : 'Confirm reschedule' }}
+          </button>
+        </div>
+      }
+    </div>
+  </div>
+}
+
+<!-- ══ CANCEL MODAL ══ -->
+@if (showCancelConfirm) {
+  <div class="modal-backdrop" (click)="closeModal()">
+    <div class="modal-box modal-sm" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Cancel appointment</h3>
+        <button class="modal-close" (click)="closeModal()">Close</button>
+      </div>
+      <p class="modal-sub">
+        Are you sure you want to cancel your appointment with
+        <strong>{{ cancelTarget?.doctor?.name }}</strong> on
+        <strong>{{ cancelTarget ? formatDate(cancelTarget.appointmentDate) : '' }}</strong>?
+        This cannot be undone.
+      </p>
+      <div class="modal-footer">
+        <button class="modal-btn cancel-modal-btn" (click)="closeModal()">Keep it</button>
+        <button class="modal-btn danger-modal-btn" [disabled]="cancelLoading" (click)="cancelAppointment()">
+          {{ cancelLoading ? 'Cancelling…' : 'Yes, cancel' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

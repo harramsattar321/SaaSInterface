@@ -6,6 +6,7 @@ import { DashboardComponent } from './components/dashboard/dashboard.component';
 import { AuthGuard } from './guards/auth.guard';
 import { ResetPasswordComponent } from './components/reset-password/reset-password';
 import { AppointmentBookingComponent } from './components/appointments/appointments';
+import { PatientDashboard } from './components/patient-dashboard/patient-dashboard';
 
 export const routes: Routes = [
   { path: '', redirectTo: '/login', pathMatch: 'full' },
@@ -15,7 +16,11 @@ export const routes: Routes = [
   { path: 'appointment', component: AppointmentBookingComponent },
   { 
     path: 'dashboard', 
-    component: DashboardComponent,
+    component: PatientDashboard,
+    // canActivate: [AuthGuard]
+  },
+  { 
+    path: 'chatbot', component: DashboardComponent,
     // canActivate: [AuthGuard]
   },
   { path: '**', redirectTo: '/login' }

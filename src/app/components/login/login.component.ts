@@ -80,6 +80,7 @@ export class LoginComponent implements OnInit {
       next: (response: any) => {
         clearTimeout(this.timeoutHandle);
         this.loading = false;
+        console.log('LOGIN RESPONSE:', response);
         if (response.success) {
           this.email = '';
           this.password = '';
