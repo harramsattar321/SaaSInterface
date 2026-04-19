@@ -79,10 +79,12 @@ export class AppointmentService {
   }
 
   getAppointmentsByDoctorAndDate(doctorId: number, date: string): Observable<Appointment[]> {
-    return this.http.get<Appointment[]>(
-      `${this.hospitalApi}/api/appointments?doctorId=${doctorId}&date=${date}`
-    );
-  }
+  return this.http.get<any>(
+    `${this.hospitalApi}/api/appointments?doctorId=${doctorId}&date=${date}`
+  ).pipe(
+    map((res) => Array.isArray(res) ? res : res.data ?? [])
+  );
+}
 
   bookAppointment(appointment: Appointment): Observable<Appointment> {
     return this.http.post<Appointment>(`${this.hospitalApi}/api/appointments`, appointment);

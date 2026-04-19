@@ -139,10 +139,11 @@ export class AppointmentBookingComponent implements OnInit {
       this.selectedDoctor.id,
       this.selectedDate
     ).subscribe({
-      next: (appointments) => {
-        this.zone.run(() => {
+      next: (response: any) => {
+          this.zone.run(() => {
+          const appointments = Array.isArray(response) ? response : response.data ?? [];
           console.log('3. HTTP response:', appointments);
-          this.bookedSlots = (appointments || []).map((a: any) => a.time);
+          this.bookedSlots = appointments.map((a: any) => a.time);
           this.generateAvailableSlots(slotsForDay);
           console.log('4. Available slots:', this.availableSlots);
           this.isLoadingSlots = false;
@@ -213,8 +214,9 @@ export class AppointmentBookingComponent implements OnInit {
       this.selectedDoctor!.id,
       this.selectedDate
     ).subscribe({
-      next: (appointments) => {
-        const patientAlreadyBooked = appointments.some(
+      next: (response: any) => {
+  const appointments = Array.isArray(response) ? response : response.data ?? [];
+  const patientAlreadyBooked = appointments.some(
           (a: any) => a.patientName === this.patientId
         );
   
