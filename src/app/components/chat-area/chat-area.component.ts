@@ -3,7 +3,7 @@ import { Component, OnDestroy, OnInit, ChangeDetectorRef } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ModelService } from '../../services/model.service';
 import { Subscription } from 'rxjs';
-import { ChatService } from '../../services/chat.services';
+import { ChatService, ReportAnalysis } from '../../services/chat.services';
 import { Router, RouterModule } from '@angular/router';
 
 interface Message {
@@ -20,6 +20,8 @@ interface Message {
   liked?: boolean;
   disliked?: boolean;
   copied?: boolean;
+  // Report analysis result attached to an AI message
+  reportAnalysis?: ReportAnalysis;
 }
 
 @Component({
@@ -40,6 +42,7 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
 
   isLoading = false;
   isLoadingChat = false;
+  isAnalyzingReport = false;
 
   selectedModel: string = 'model1';
   private modelSubscription?: Subscription;
@@ -76,8 +79,6 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
       this.selectedModel = model;
     });
 
-    // ✅ REMOVED: loadChatList() — sidebar handles this exclusively
-
     this.activeChatSubscription = this.chatService.activeChatId$.subscribe((chatId) => {
       if (!chatId) {
         this.currentChatId = null;
@@ -85,11 +86,7 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
         this.cdr.detectChanges();
         return;
       }
-
-      // Same chat — do nothing
       if (chatId === this.currentChatId) return;
-
-      // Different chat — load immediately, no conditions
       this.openChat(chatId);
     });
   }
@@ -102,7 +99,7 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
     if (this.activeChatSubscription) this.activeChatSubscription.unsubscribe();
   }
 
-  // ─── Chat Loading ──────────────────────────────────────────────────────────
+  // ─── Navigation ───────────────────────────────────────────────────────────
 
   goToDashboard(): void {
     this.router.navigate(['/dashboard']);
@@ -117,15 +114,15 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
     this.sendMessage();
   }
 
+  // ─── Chat Loading ──────────────────────────────────────────────────────────
+
   private openChat(chatId: string) {
-    this.currentChatId = chatId; // set ID immediately so duplicate calls are blocked
+    this.currentChatId = chatId;
     this.isLoadingChat = true;
-    // DON'T clear messages yet — keep showing current chat while new one loads
     this.cdr.detectChanges();
 
     this.chatService.loadChat(chatId).subscribe({
       next: (res) => {
-        // Only NOW swap the messages — no welcome screen flash
         this.messages = res.chat.messages.map((m) => ({
           id: this.messageIdCounter++,
           text: m.content,
@@ -143,17 +140,65 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
     });
   }
 
+  // ─── File Selection ───────────────────────────────────────────────────────
+
+  triggerFileInput(): void {
+    const input = document.getElementById('report-file-input') as HTMLInputElement;
+    input?.click();
+  }
+
+  onFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg'];
+    if (!allowedTypes.includes(file.type)) {
+      alert('Please upload a PDF, PNG, or JPG file.');
+      return;
+    }
+
+    const maxSize = 10 * 1024 * 1024; // 10 MB
+    if (file.size > maxSize) {
+      alert('File is too large. Maximum size is 10 MB.');
+      return;
+    }
+
+    this.selectedFile = file;
+    this.cdr.detectChanges();
+
+    // Reset input so the same file can be re-selected if needed
+    input.value = '';
+  }
+
+  removeSelectedFile(): void {
+    this.selectedFile = null;
+    this.cdr.detectChanges();
+  }
+
+  formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
   // ─── Send Message ──────────────────────────────────────────────────────────
 
   sendMessage() {
     if (this.isRecording) this.stopRecording();
-    if (this.userInput.trim() === '' && !this.selectedFile) return;
+
+    // If a file is selected, analyze it instead of sending a normal chat message
+    if (this.selectedFile) {
+      this.sendReportMessage(this.selectedFile);
+      return;
+    }
+
+    if (this.userInput.trim() === '') return;
 
     const messageText = this.userInput.trim();
-
     const userMessage: Message = {
       id: this.messageIdCounter++,
-      text: messageText || 'File attached',
+      text: messageText,
       isUser: true,
       timestamp: new Date(),
     };
@@ -179,6 +224,58 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
     }
   }
 
+  // ─── Report Analysis ──────────────────────────────────────────────────────
+
+  private sendReportMessage(file: File): void {
+    // 1. Show the user's file upload as a message
+    const userMessage: Message = {
+      id: this.messageIdCounter++,
+      text: '',
+      isUser: true,
+      timestamp: new Date(),
+      file: { name: file.name, size: file.size, type: file.type },
+    };
+    this.messages.push(userMessage);
+    this.selectedFile = null;
+    this.isAnalyzingReport = true;
+    this.cdr.detectChanges();
+
+    // 2. Call Flask
+    this.chatService.analyzeReport(file).subscribe({
+      next: (res) => {
+        this.isAnalyzingReport = false;
+
+        // 3. Attach the full analysis to an AI message
+        const aiMessage: Message = {
+          id: this.messageIdCounter++,
+          text: '',
+          isUser: false,
+          timestamp: new Date(),
+          reportAnalysis: res.analysis,
+        };
+        this.messages.push(aiMessage);
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        this.isAnalyzingReport = false;
+        const errText =
+          err.status === 401
+            ? 'Session expired. Please log in again.'
+            : err.error?.error || 'Could not analyze the report. Please try again.';
+
+        this.messages.push({
+          id: this.messageIdCounter++,
+          text: errText,
+          isUser: false,
+          timestamp: new Date(),
+        });
+        this.cdr.detectChanges();
+      },
+    });
+  }
+
+  // ─── Dispatch Chat Message ─────────────────────────────────────────────────
+
   private dispatchMessage(messageText: string) {
     const chatId = this.currentChatId!;
 
@@ -188,7 +285,6 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
           next: (res) => {
             this.isLoading = false;
             const replyText = res.reply;
-
             const aiMessage: Message = {
               id: this.messageIdCounter++,
               text: replyText,
@@ -198,8 +294,6 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
             this.messages.push(aiMessage);
             this.cdr.detectChanges();
 
-            // ✅ saveMessage() tap() in ChatService automatically
-            // updates sidebar title + moves chat to top
             this.chatService.saveMessage(chatId, 'assistant', replyText).subscribe({
               error: (err) => console.error('Failed to save assistant reply:', err),
             });
@@ -220,8 +314,7 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
           },
         });
       },
-      error: (err) => {
-        console.error('Failed to save user message:', err);
+      error: () => {
         this.chatService.sendMessage(messageText).subscribe({
           next: (res) => {
             this.isLoading = false;

@@ -21,12 +21,20 @@ export interface ChatDetail extends ChatSession {
   messages: ChatMessage[];
 }
 
+export interface ReportAnalysis {
+  report_type: string;
+  summary: string;
+  abnormal_values: { name: string; value: string; normal_range: string; status: 'HIGH' | 'LOW' }[];
+  key_observations: string[];
+  advice: string;
+  disclaimer: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ChatService {
-  private nodeUrl = 'http://localhost:8000';   // Node/Express backend
-  private flaskUrl = 'http://localhost:5000';  // Flask AI backend
+  private nodeUrl = 'http://localhost:8000';
+  private flaskUrl = 'http://localhost:5000';
 
-  // ─── Active chat state shared across components ───────────────────────────
   private activeChatIdSubject = new BehaviorSubject<string | null>(null);
   activeChatId$ = this.activeChatIdSubject.asObservable();
 
@@ -40,9 +48,13 @@ export class ChatService {
   private getHeaders(): HttpHeaders {
     const token = localStorage.getItem('token') ?? '';
     return new HttpHeaders({
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
     });
+  }
+
+  private getAuthToken(): string {
+    return localStorage.getItem('token') ?? '';
   }
 
   private getPatientName(): string {
@@ -56,15 +68,13 @@ export class ChatService {
 
   // ─── Chat List ────────────────────────────────────────────────────────────
 
-  /** Fetch all chats for the logged-in patient and push into chatList$ */
   loadChatList(): Observable<{ success: boolean; chats: ChatSession[] }> {
     return this.http
-      .get<{ success: boolean; chats: ChatSession[] }>(
-        `${this.nodeUrl}/api/chats`,
-        { headers: this.getHeaders() }
-      )
+      .get<{ success: boolean; chats: ChatSession[] }>(`${this.nodeUrl}/api/chats`, {
+        headers: this.getHeaders(),
+      })
       .pipe(
-        tap(res => {
+        tap((res) => {
           if (res.success) this.chatListSubject.next(res.chats);
         })
       );
@@ -72,7 +82,6 @@ export class ChatService {
 
   // ─── Single Chat ──────────────────────────────────────────────────────────
 
-  /** Create a brand-new empty chat session, returns its chatId */
   createNewChat(): Observable<{ success: boolean; chat: ChatDetail }> {
     return this.http
       .post<{ success: boolean; chat: ChatDetail }>(
@@ -81,15 +90,14 @@ export class ChatService {
         { headers: this.getHeaders() }
       )
       .pipe(
-        tap(res => {
+        tap((res) => {
           if (res.success) {
-            // Add to local list immediately (no full reload needed)
             const current = this.chatListSubject.getValue();
             const newEntry: ChatSession = {
-              chatId:    res.chat.chatId,
-              title:     res.chat.title,
+              chatId: res.chat.chatId,
+              title: res.chat.title,
               createdAt: res.chat.createdAt,
-              updatedAt: res.chat.updatedAt
+              updatedAt: res.chat.updatedAt,
             };
             this.chatListSubject.next([newEntry, ...current]);
             this.setActiveChat(res.chat.chatId);
@@ -98,7 +106,6 @@ export class ChatService {
       );
   }
 
-  /** Load full message history for a chat */
   loadChat(chatId: string): Observable<{ success: boolean; chat: ChatDetail }> {
     return this.http.get<{ success: boolean; chat: ChatDetail }>(
       `${this.nodeUrl}/api/chats/${chatId}`,
@@ -106,7 +113,6 @@ export class ChatService {
     );
   }
 
-  /** Save a single message (user or assistant) to the active chat */
   saveMessage(
     chatId: string,
     role: 'user' | 'assistant',
@@ -119,17 +125,13 @@ export class ChatService {
         { headers: this.getHeaders() }
       )
       .pipe(
-        tap(res => {
+        tap((res) => {
           if (res.success) {
-            // Update the title in the sidebar list if it was auto-generated
             const current = this.chatListSubject.getValue();
-            const updated = current.map(c =>
-              c.chatId === chatId
-                ? { ...c, title: res.title, updatedAt: new Date() }
-                : c
+            const updated = current.map((c) =>
+              c.chatId === chatId ? { ...c, title: res.title, updatedAt: new Date() } : c
             );
-            // Move this chat to top (most recent)
-            const idx = updated.findIndex(c => c.chatId === chatId);
+            const idx = updated.findIndex((c) => c.chatId === chatId);
             if (idx > 0) {
               const [moved] = updated.splice(idx, 1);
               updated.unshift(moved);
@@ -140,36 +142,27 @@ export class ChatService {
       );
   }
 
-  /** Rename a chat manually */
   renameChat(chatId: string, title: string): Observable<any> {
     return this.http
-      .put(
-        `${this.nodeUrl}/api/chats/${chatId}/rename`,
-        { title },
-        { headers: this.getHeaders() }
-      )
+      .put(`${this.nodeUrl}/api/chats/${chatId}/rename`, { title }, { headers: this.getHeaders() })
       .pipe(
         tap(() => {
           const current = this.chatListSubject.getValue();
           this.chatListSubject.next(
-            current.map(c => (c.chatId === chatId ? { ...c, title } : c))
+            current.map((c) => (c.chatId === chatId ? { ...c, title } : c))
           );
         })
       );
   }
 
-  /** Delete a chat */
   deleteChat(chatId: string): Observable<any> {
     return this.http
-      .delete(`${this.nodeUrl}/api/chats/${chatId}`, {
-        headers: this.getHeaders()
-      })
+      .delete(`${this.nodeUrl}/api/chats/${chatId}`, { headers: this.getHeaders() })
       .pipe(
         tap(() => {
           const current = this.chatListSubject.getValue();
-          const remaining = current.filter(c => c.chatId !== chatId);
+          const remaining = current.filter((c) => c.chatId !== chatId);
           this.chatListSubject.next(remaining);
-          // If the deleted chat was active, clear it
           if (this.activeChatIdSubject.getValue() === chatId) {
             this.setActiveChat(remaining.length ? remaining[0].chatId : null);
           }
@@ -189,14 +182,10 @@ export class ChatService {
 
   // ─── Flask AI ─────────────────────────────────────────────────────────────
 
-  /** Send a message to the Flask AI and get a reply */
   sendMessage(message: string): Observable<{ reply: string; state: string }> {
     return this.http.post<{ reply: string; state: string }>(
       `${this.flaskUrl}/chat`,
-      {
-        message,
-        patientName: this.getPatientName()
-      },
+      { message, patientName: this.getPatientName() },
       { headers: this.getHeaders() }
     );
   }
@@ -206,6 +195,26 @@ export class ChatService {
       `${this.flaskUrl}/chat/reset`,
       { patientName: this.getPatientName() },
       { headers: this.getHeaders() }
+    );
+  }
+
+  // ─── Report Analyzer ──────────────────────────────────────────────────────
+
+  /** Upload a medical report PDF and get back a structured analysis */
+  analyzeReport(file: File): Observable<{ patient: string; analysis: ReportAnalysis }> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    // NOTE: Do NOT set Content-Type header manually — browser sets it
+    // automatically with the correct multipart boundary for FormData
+    return this.http.post<{ patient: string; analysis: ReportAnalysis }>(
+      `${this.flaskUrl}/analyze-report`,
+      formData,
+      {
+        headers: new HttpHeaders({
+          Authorization: `Bearer ${this.getAuthToken()}`,
+        }),
+      }
     );
   }
 }

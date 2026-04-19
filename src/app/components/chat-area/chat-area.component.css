@@ -438,6 +438,204 @@
 }
 
 /* ============================================
+   REPORT ANALYSIS CARD
+   Add these styles to the bottom of chat-area.component.css
+   ============================================ */
+
+   .report-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 320px;
+  }
+  
+  .report-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  
+  .report-card-header svg {
+    color: #3b7a99;
+    flex-shrink: 0;
+  }
+  
+  .report-card-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #0D3B66;
+  }
+  
+  .report-type-badge {
+    background: #eaf4fb;
+    color: #3b7a99;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 20px;
+    border: 1px solid #A4C8E1;
+    margin-left: auto;
+  }
+  
+  .report-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  
+  .report-section-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  
+  .report-section-label svg {
+    flex-shrink: 0;
+  }
+  
+  .report-summary {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #374151;
+    margin: 0;
+  }
+  
+  /* Abnormal values table */
+  .abnormal-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  
+  .abnormal-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    flex-wrap: wrap;
+  }
+  
+  .abnormal-high {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+  }
+  
+  .abnormal-low {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+  }
+  
+  .abnormal-name {
+    font-weight: 600;
+    color: #1f2937;
+    flex: 1;
+    min-width: 100px;
+  }
+  
+  .abnormal-value {
+    font-weight: 700;
+    color: #111827;
+  }
+  
+  .abnormal-range {
+    font-size: 11px;
+    color: #6b7280;
+    flex: 1;
+  }
+  
+  .abnormal-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 12px;
+    letter-spacing: 0.05em;
+  }
+  
+  .badge-high {
+    background: #fee2e2;
+    color: #b91c1c;
+  }
+  
+  .badge-low {
+    background: #dbeafe;
+    color: #1d4ed8;
+  }
+  
+  /* All normal indicator */
+  .all-normal {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #15803d;
+    font-weight: 500;
+    padding: 6px 10px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 8px;
+  }
+  
+  .all-normal svg {
+    color: #16a34a;
+    flex-shrink: 0;
+  }
+  
+  /* Observations */
+  .observations-list {
+    margin: 4px 0 0 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .observations-list li {
+    font-size: 13px;
+    color: #374151;
+    line-height: 1.5;
+  }
+  
+  /* Advice */
+  .report-advice {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    font-size: 13px;
+    color: #1f2937;
+    background: #f0f8ff;
+    border: 1px solid #A4C8E1;
+    border-radius: 8px;
+    padding: 8px 10px;
+    line-height: 1.5;
+  }
+  
+  .report-advice svg {
+    color: #3b7a99;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  
+  /* Disclaimer */
+  .report-disclaimer {
+    font-size: 11px;
+    color: #9ca3af;
+    line-height: 1.5;
+    border-top: 1px solid #f3f4f6;
+    padding-top: 8px;
+    font-style: italic;
+  }
+  
+/* ============================================
      7. FILE PREVIEWS
      ============================================ */
 .file-preview-container {
