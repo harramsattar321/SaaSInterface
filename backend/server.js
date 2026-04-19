@@ -153,65 +153,166 @@ chatSchema.pre('save', function () {
 const Chat = mongoose.model('Chat', chatSchema);
 
 // ============================================
-// HELPER: Intent-Aware Chat Title Generator
+// HELPER: AI-Powered Chat Title Generator
 // ============================================
-function generateChatTitle(firstUserMessage) {
-  if (!firstUserMessage || firstUserMessage.trim().length === 0) {
-    return 'New Chat';
+function generateChatTitle(firstUserMessage, existingTitles = []) {
+  if (!firstUserMessage || firstUserMessage.trim().length === 0) return 'New Chat';
+
+  let msg = firstUserMessage.trim();
+
+  // ── Greetings → skip to default ───────────────────────────────────────────
+  if (/^(hi|hello|hey|howdy|good\s*(morning|afternoon|evening)|what'?s up|yo|sup)\b/i.test(msg)) {
+    return uniqueTitle('General Conversation', existingTitles);
   }
 
-  let msg = firstUserMessage.trim().toLowerCase();
+  // ── Thanks / follow-up ────────────────────────────────────────────────────
+  if (/^(thanks|thank you|thx|ty|cheers|appreciate)/i.test(msg)) {
+    return uniqueTitle('Follow-up Message', existingTitles);
+  }
 
-  const greetings = [
-    /^(hi|hello|hey|hiya|howdy|greetings|good\s*(morning|afternoon|evening|night))[^\w]*/i,
-    /^(what'?s up|how are you|how r u|how do you do)[^\w]*/i,
-    /^(yo|sup|heya|helo|hii+|heyy+)[^\w]*/i
-  ];
-  if (greetings.some(r => r.test(msg))) return 'General Conversation';
+  // ── RESCHEDULE ────────────────────────────────────────────────────────────
+  if (/reschedul/i.test(msg)) {
+    if (/appointment/i.test(msg))    return uniqueTitle('Rescheduling an Appointment', existingTitles);
+    if (/doctor|dr\.?/i.test(msg))   return uniqueTitle('Rescheduling Doctor Visit', existingTitles);
+    return uniqueTitle('Rescheduling Request', existingTitles);
+  }
 
-  if (/^(thanks|thank you|thx|ty|cheers|appreciate)/i.test(msg)) return 'Follow-up';
+  // ── CANCEL ────────────────────────────────────────────────────────────────
+  if (/cancel/i.test(msg)) {
+    if (/appointment/i.test(msg)) return uniqueTitle('Cancelling an Appointment', existingTitles);
+    return uniqueTitle('Cancellation Request', existingTitles);
+  }
 
-  const painMatch = msg.match(
-    /(?:i have|i feel|i am|i'm|feeling|suffering from|experiencing)\s+(?:a\s+)?([a-z\s]+(?:pain|ache|aching|fever|cough|cold|nausea|vomiting|headache|dizziness|fatigue|weakness|swelling|bleeding|rash|itching|burning|numbness|shortness of breath|chest tightness))/i
+  // ── BOOK / SCHEDULE ───────────────────────────────────────────────────────
+  if (/\b(book|schedule|make)\b.*(appointment|visit|slot|consultation)/i.test(msg)) {
+    return uniqueTitle('Booking an Appointment', existingTitles);
+  }
+
+  // ── DOCTOR AVAILABILITY ───────────────────────────────────────────────────
+  if (/\b(available|availability|free|open)\b.*\b(doctor|dr\.?|specialist)/i.test(msg) ||
+      /\b(doctor|dr\.?|specialist)\b.*\b(available|availability|free|open)/i.test(msg) ||
+      /what doctors are available/i.test(msg)) {
+    const dayMatch = msg.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|this week|next week|weekend)\b/i);
+    if (dayMatch) return uniqueTitle(`Doctor Availability — ${toTitleCase(dayMatch[1])}`, existingTitles);
+    return uniqueTitle('Doctor Availability', existingTitles);
+  }
+
+  // ── APPOINTMENT STATUS ────────────────────────────────────────────────────
+  if (/\b(appointment|visit)\b/i.test(msg)) {
+    if (/confirm|confirmation/i.test(msg)) return uniqueTitle('Appointment Confirmation', existingTitles);
+    if (/status|update/i.test(msg))        return uniqueTitle('Appointment Status Update', existingTitles);
+    if (/remind|reminder/i.test(msg))      return uniqueTitle('Appointment Reminder', existingTitles);
+    if (/upcoming|next|future/i.test(msg)) return uniqueTitle('Upcoming Appointment', existingTitles);
+    return uniqueTitle('Appointment Enquiry', existingTitles);
+  }
+
+  // ── INSURANCE ─────────────────────────────────────────────────────────────
+  if (/insurance/i.test(msg)) {
+    if (/accept|support|partner|cover|network/i.test(msg)) return uniqueTitle('Accepted Insurance Providers', existingTitles);
+    if (/claim/i.test(msg))                                return uniqueTitle('Insurance Claim Help', existingTitles);
+    if (/cost|price|fee|pay/i.test(msg))                   return uniqueTitle('Insurance Coverage & Costs', existingTitles);
+    return uniqueTitle('Insurance Enquiry', existingTitles);
+  }
+
+  // ── SYMPTOMS ──────────────────────────────────────────────────────────────
+  const symptomMatch = msg.match(
+    /\b(pain|ache|fever|cough|cold|nausea|vomiting|headache|migraine|dizziness|fatigue|weakness|swelling|bleeding|rash|itching|burning|numbness|chest tightness|shortness of breath|sore throat|back pain|stomach ache|anxiety|depression)\b/i
   );
-  if (painMatch) {
-    return toTitleCase(painMatch[1].trim().replace(/\s+/g, ' '));
+  if (symptomMatch) {
+    return uniqueTitle(`${toTitleCase(symptomMatch[1])} — Symptom Help`, existingTitles);
   }
 
-  const questionPatterns = [
-    { re: /^(?:what|who|which)\s+(?:is|are|was|were|causes?|happens?)\s+(?:a\s+|an\s+|the\s+)?(.+?)(?:\?|$)/i, prefix: '' },
-    { re: /^(?:how)\s+(?:do(?:es)?|can|should|to)\s+(?:i\s+|you\s+|we\s+)?(?:treat|manage|handle|cure|deal with|fix|prevent|stop|reduce|improve)\s+(.+?)(?:\?|$)/i, prefix: 'Treating ' },
-    { re: /^(?:how)\s+(?:do(?:es)?|can|should|to)\s+(?:i\s+|you\s+|we\s+)?(.+?)(?:\?|$)/i, prefix: '' },
-    { re: /^(?:can|could|would|should|is|are|does|do)\s+(?:you|i|we|it|they)?\s*(?:explain|tell me about|describe|help with|help me with|know about|understand)?\s+(.+?)(?:\?|$)/i, prefix: '' },
-    { re: /^(?:explain|describe|tell me about|what about|talk about)\s+(?:a\s+|an\s+|the\s+)?(.+?)(?:\?|$)/i, prefix: '' },
-    { re: /^(?:i want to know|i need to know|i'd like to know|i need help with|i need information|i need info)\s+(?:about\s+)?(.+?)(?:\?|$)/i, prefix: '' },
-  ];
-
-  for (const { re, prefix } of questionPatterns) {
-    const m = firstUserMessage.trim().match(re);
-    if (m && m[1]) {
-      let topic = m[1].trim().replace(/[?.!]+$/, '').trim();
-      topic = topic.replace(/\s*(please|for me|to me|right now|asap)$/i, '').trim();
-      if (topic.length > 3) return toTitleCase(prefix + topic);
-    }
+  // ── MEDICATION / PRESCRIPTION ─────────────────────────────────────────────
+  if (/\b(medication|medicine|drug|prescription|dose|dosage|side effect|tablet|pill|inject)\b/i.test(msg)) {
+    if (/side effect/i.test(msg)) return uniqueTitle('Medication Side Effects', existingTitles);
+    if (/dose|dosage/i.test(msg)) return uniqueTitle('Medication Dosage Query', existingTitles);
+    return uniqueTitle('Medication Enquiry', existingTitles);
   }
 
-  const statementMatch = firstUserMessage.trim().match(
-    /^(?:i am|i'm|i was|i have|i've been|i feel|i think)\s+(.+?)(?:\.|$)/i
-  );
-  if (statementMatch && statementMatch[1]) {
-    const topic = statementMatch[1].trim().replace(/[?.!]+$/, '');
-    if (topic.length > 3) return toTitleCase(topic);
+  // ── LAB / TEST / REPORT ───────────────────────────────────────────────────
+  if (/\b(lab|test|report|result|blood|urine|x.?ray|scan|mri|ultrasound|ecg|ekg)\b/i.test(msg)) {
+    if (/result|report/i.test(msg)) return uniqueTitle('Lab Results & Reports', existingTitles);
+    return uniqueTitle('Medical Test Enquiry', existingTitles);
   }
 
-  let title = firstUserMessage.trim();
-  title = title.replace(/[*_`#>\-]+/g, '').trim();
+  // ── BILLING / PAYMENT ─────────────────────────────────────────────────────
+  if (/\b(bill|billing|payment|pay|fee|cost|price|charge|invoice|receipt)\b/i.test(msg)) {
+    return uniqueTitle('Billing & Payment Query', existingTitles);
+  }
+
+  // ── EMERGENCY ─────────────────────────────────────────────────────────────
+  if (/\b(emergency|urgent|immediately|right now|critical|serious)\b/i.test(msg)) {
+    return uniqueTitle('Urgent Medical Query', existingTitles);
+  }
+
+  // ── HOW DO I / HOW TO ─────────────────────────────────────────────────────
+  const howMatch = msg.match(/^how\s+(?:do\s+i|to|can\s+i|should\s+i)\s+(.+?)(?:\?|$)/i);
+  if (howMatch) {
+    const topic = howMatch[1].trim().replace(/[?.!]+$/, '');
+    return uniqueTitle(toTitleCase(topic), existingTitles);
+  }
+
+  // ── WHAT IS / WHAT ARE ────────────────────────────────────────────────────
+  const whatMatch = msg.match(/^what\s+(?:is|are|was|were)\s+(?:a\s+|an\s+|the\s+)?(.+?)(?:\?|$)/i);
+  if (whatMatch) {
+    const topic = whatMatch[1].trim().replace(/[?.!]+$/, '');
+    return uniqueTitle(toTitleCase(topic), existingTitles);
+  }
+
+  // ── CAN I / SHOULD I ─────────────────────────────────────────────────────
+  const canMatch = msg.match(/^(?:can|should|could|would)\s+(?:i|you|we)\s+(.+?)(?:\?|$)/i);
+  if (canMatch) {
+    const topic = canMatch[1].trim().replace(/[?.!]+$/, '');
+    return uniqueTitle(toTitleCase(topic), existingTitles);
+  }
+
+  // ── FALLBACK — truncate the message cleanly ───────────────────────────────
+  let title = msg.replace(/[*_`#>\-]+/g, '').trim();
   title = title.replace(/[.!?]+$/, '').trim();
   title = toTitleCase(title);
-  if (title.length > 55) {
-    title = title.substring(0, 55).replace(/\s+\S*$/, '') + '...';
+  if (title.length > 50) {
+    title = title.substring(0, 50).replace(/\s+\S*$/, '') + '...';
   }
 
+  return uniqueTitle(title || 'New Chat', existingTitles);
+}
+
+// ── Appends date suffix if title already exists ──────────────────────────────
+function uniqueTitle(title, existingTitles) {
+  if (!existingTitles.includes(title)) return title;
+
+  // Try appending today's date
+  const today = new Date();
+  const dateStr = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const withDate = `${title} · ${dateStr}`;
+  if (!existingTitles.includes(withDate)) return withDate;
+
+  // If date version also exists, append a counter
+  let counter = 2;
+  while (existingTitles.includes(`${title} · ${dateStr} (${counter})`)) counter++;
+  return `${title} · ${dateStr} (${counter})`;
+}
+
+function toTitleCase(str) {
+  const lowers = new Set(['a','an','the','and','but','or','for','nor','on','at','to','by','in','of','up','as','is','it']);
+  return str
+    .toLowerCase()
+    .replace(/[?.!]+$/, '')
+    .trim()
+    .split(/\s+/)
+    .map((word, i) => (i === 0 || !lowers.has(word))
+      ? word.charAt(0).toUpperCase() + word.slice(1)
+      : word)
+    .join(' ');
+}
+
+function fallbackTitle(msg) {
+  // Clean and truncate — only used if Flask is down
+  let title = msg.trim().replace(/[*_`#>\-]+/g, '').trim();
+  title = title.replace(/[.!?]+$/, '').trim();
+  if (title.length > 50) {
+    title = title.substring(0, 50).replace(/\s+\S*$/, '') + '...';
+  }
   return title || 'New Chat';
 }
 
@@ -559,9 +660,20 @@ app.post('/api/chats/:chatId/message', authenticateToken, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Chat not found or access denied' });
     }
 
+    // Generate title from first user message
     if (role === 'user' && chat.title === 'New Chat' && chat.messages.length === 0) {
-      chat.title = generateChatTitle(content);
-      console.log(`✏️  Auto-title set: "${chat.title}"`);
+      // Fetch this patient's existing titles to avoid duplicates
+      const existingChats = await Chat.find({
+        patientId: req.user.userId,
+        _id: { $ne: chatId },
+        title: { $ne: 'New Chat' }
+      }).select('title').lean();
+
+      const existingTitles = existingChats.map(c => c.title);
+
+      // Generate AI title (async — await it)
+      chat.title = await generateChatTitle(content, existingTitles);
+      console.log(`✏️  AI title set: "${chat.title}"`);
     }
 
     chat.messages.push({ role, content });

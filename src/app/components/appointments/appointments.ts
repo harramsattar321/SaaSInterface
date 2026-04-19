@@ -1,12 +1,13 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core'; // 1. Added ChangeDetectorRef
+import { Component, OnInit, ChangeDetectorRef, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { AppointmentService, Doctor, Appointment } from '../../services/appointment.service';
 
 @Component({
   selector: 'app-appointment-booking',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './appointments.html',
   styleUrls: ['./appointments.css']
 })
@@ -35,7 +36,8 @@ export class AppointmentBookingComponent implements OnInit {
 
   constructor(
     private appointmentService: AppointmentService,
-    private cdr: ChangeDetectorRef // 2. Inject ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private zone: NgZone
   ) {}
 
   ngOnInit(): void {
@@ -48,7 +50,7 @@ export class AppointmentBookingComponent implements OnInit {
     const currentUser = localStorage.getItem('currentUser');
     if (currentUser) {
       const user = JSON.parse(currentUser);
-      this.patientId = user.userId || user.id; // Fallback for common ID naming
+      this.patientId = user.userId || user.id;
     }
   }
 
@@ -58,46 +60,49 @@ export class AppointmentBookingComponent implements OnInit {
   }
 
   loadDoctors(): void {
-    this.isLoadingDoctors = true;
+    this.zone.run(() => {
+      this.isLoadingDoctors = true;
+    });
+
     this.appointmentService.getAllDoctors().subscribe({
       next: (data) => {
-        this.doctors = data;
-        this.isLoadingDoctors = false;
-        // 3. Force Angular to see the data update
-        this.cdr.detectChanges(); 
+        this.zone.run(() => {
+          this.doctors = data;
+          this.isLoadingDoctors = false;
+        });
       },
       error: (err) => {
         console.error('Error loading doctors:', err);
-        this.isLoadingDoctors = false;
-        this.cdr.detectChanges();
+        this.zone.run(() => {
+          this.isLoadingDoctors = false;
+        });
       }
     });
 
-    // Fallback: If network hangs, stop the spinner after 5 seconds
     setTimeout(() => {
-        if(this.isLoadingDoctors) {
-            this.isLoadingDoctors = false;
-            this.cdr.detectChanges();
-        }
+      if (this.isLoadingDoctors) {
+        this.zone.run(() => {
+          this.isLoadingDoctors = false;
+        });
+      }
     }, 5000);
   }
 
   onDoctorSelect(event: Event): void {
     const selectEl = event.target as HTMLSelectElement;
     const doctorId = Number(selectEl.value);
-    
-    // Use find more safely
-    this.selectedDoctor = this.doctors.find(d => Number(d.id) === doctorId) || null;
-    
-    this.selectedDate = '';
-    this.selectedSlot = '';
-    this.availableSlots = [];
-    this.slotError = '';
 
-    if (this.selectedDoctor) {
-      this.availableDaysForDoctor = this.getDayNumbers(this.selectedDoctor.availableDays);
-    }
-    this.cdr.detectChanges();
+    this.zone.run(() => {
+      this.selectedDoctor = this.doctors.find(d => Number(d.id) === doctorId) || null;
+      this.selectedDate = '';
+      this.selectedSlot = '';
+      this.availableSlots = [];
+      this.slotError = '';
+
+      if (this.selectedDoctor) {
+        this.availableDaysForDoctor = this.getDayNumbers(this.selectedDoctor.availableDays);
+      }
+    });
   }
 
   private getDayNumbers(days: string[]): number[] {
@@ -115,10 +120,12 @@ export class AppointmentBookingComponent implements OnInit {
 
     if (!this.selectedDoctor || !this.selectedDate) return;
 
-    const dateObj = new Date(this.selectedDate + 'T00:00:00'); // Added T00:00 to avoid timezone shifts
+    const dateObj = new Date(this.selectedDate + 'T00:00:00');
     const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
-
     const slotsForDay = this.selectedDoctor.timeSlots.filter(ts => ts.day === dayName);
+
+    console.log('1. Day name:', dayName);
+    console.log('2. Slots for day:', slotsForDay);
 
     if (slotsForDay.length === 0) {
       this.slotError = `Dr. ${this.selectedDoctor.name.replace('Dr. ', '')} is not available on ${dayName}s.`;
@@ -126,21 +133,33 @@ export class AppointmentBookingComponent implements OnInit {
     }
 
     this.isLoadingSlots = true;
+    this.cdr.detectChanges(); // Force UI to show any loading spinners
 
     this.appointmentService.getAppointmentsByDoctorAndDate(
       this.selectedDoctor.id,
       this.selectedDate
     ).subscribe({
       next: (appointments) => {
-        this.bookedSlots = (appointments || []).map(a => a.time);
-        this.generateAvailableSlots(slotsForDay);
-        this.isLoadingSlots = false;
-        this.cdr.detectChanges();
+        this.zone.run(() => {
+          console.log('3. HTTP response:', appointments);
+          this.bookedSlots = (appointments || []).map((a: any) => a.time);
+          this.generateAvailableSlots(slotsForDay);
+          console.log('4. Available slots:', this.availableSlots);
+          this.isLoadingSlots = false;
+          
+          // Force Angular to update the view with the new slots
+          this.cdr.detectChanges(); 
+        });
       },
-      error: () => {
-        this.generateAvailableSlots(slotsForDay);
-        this.isLoadingSlots = false;
-        this.cdr.detectChanges();
+      error: (err) => {
+        this.zone.run(() => {
+          console.log('3. HTTP ERROR:', err);
+          this.generateAvailableSlots(slotsForDay);
+          this.isLoadingSlots = false;
+          
+          // Force Angular to update the view
+          this.cdr.detectChanges(); 
+        });
       }
     });
   }
@@ -167,12 +186,12 @@ export class AppointmentBookingComponent implements OnInit {
     });
 
     this.availableSlots = allSlots.filter(slot => !this.bookedSlots.includes(slot));
-    this.cdr.detectChanges();
   }
 
   onSlotSelect(slot: string): void {
-    this.selectedSlot = slot;
-    this.cdr.detectChanges();
+    this.zone.run(() => {
+      this.selectedSlot = slot;
+    });
   }
 
   isSlotSelected(slot: string): boolean {
@@ -185,19 +204,81 @@ export class AppointmentBookingComponent implements OnInit {
 
   submitAppointment(): void {
     if (!this.isFormValid) return;
-
-    this.isSubmitting = true;
-    this.bookingError = '';
-
+  
+    // Check if patient already has an appointment with this doctor on this date
+    const existingBooking = this.bookedSlots.find(slot => slot === this.selectedSlot);
+    
+    // Check patient's own appointments for this doctor+date
+    this.appointmentService.getAppointmentsByDoctorAndDate(
+      this.selectedDoctor!.id,
+      this.selectedDate
+    ).subscribe({
+      next: (appointments) => {
+        const patientAlreadyBooked = appointments.some(
+          (a: any) => a.patientName === this.patientId
+        );
+  
+        if (patientAlreadyBooked) {
+          this.zone.run(() => {
+            this.bookingError = `You already have an appointment with ${this.selectedDoctor!.name} on ${this.getFormattedDate()}. Please choose a different date.`;
+            this.cdr.detectChanges();
+          });
+          return;
+        }
+  
+        // No duplicate — proceed with booking
+        this.proceedWithBooking();
+      },
+      error: (err) => {
+        this.zone.run(async () => {
+          let message = 'Failed to book appointment. Please try again.';
+          
+          try {
+            // Handle both parsed object and ReadableStream (withFetch quirk)
+            if (err?.error?.message) {
+              message = err.error.message;
+            } else if (err?.error instanceof ReadableStream) {
+              const reader = err.error.getReader();
+              const decoder = new TextDecoder();
+              let result = '';
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                result += decoder.decode(value);
+              }
+              const parsed = JSON.parse(result);
+              message = parsed.message || message;
+            } else if (typeof err?.error === 'string') {
+              const parsed = JSON.parse(err.error);
+              message = parsed.message || message;
+            }
+          } catch (e) {
+            console.error('Error parsing error response:', e);
+          }
+      
+          this.bookingError = message;
+          this.isSubmitting = false;
+          this.cdr.detectChanges();
+        });
+      }
+    });
+  }
+  
+  private proceedWithBooking(): void {
+    this.zone.run(() => {
+      this.isSubmitting = true;
+      this.bookingError = '';
+      this.cdr.detectChanges();
+    });
+  
     const dateObj = new Date(this.selectedDate + 'T00:00:00');
     const [time, ampm] = this.selectedSlot.split(' ');
     const [h, m] = time.split(':').map(Number);
     let hours = h;
     if (ampm === 'PM' && h !== 12) hours += 12;
     if (ampm === 'AM' && h === 12) hours = 0;
-
     dateObj.setHours(hours, m, 0, 0);
-
+  
     const appointment: Appointment = {
       doctorId: this.selectedDoctor!.id,
       patientName: this.patientId,
@@ -206,19 +287,47 @@ export class AppointmentBookingComponent implements OnInit {
       priority: 'Normal',
       status: 'pending'
     };
-
+  
     this.appointmentService.bookAppointment(appointment).subscribe({
       next: () => {
-        this.bookingSuccess = true;
-        this.isSubmitting = false;
-        this.resetForm();
-        this.cdr.detectChanges();
+        this.zone.run(() => {
+          this.isSubmitting = false;
+          this.bookingSuccess = true;
+          this.resetForm();
+          this.cdr.detectChanges();
+        });
       },
       error: (err) => {
-        console.error('Booking error:', err);
-        this.bookingError = 'Failed to book appointment. Please try again.';
-        this.isSubmitting = false;
-        this.cdr.detectChanges();
+        this.zone.run(async () => {
+          let message = 'Failed to book appointment. Please try again.';
+          
+          try {
+            // Handle both parsed object and ReadableStream (withFetch quirk)
+            if (err?.error?.message) {
+              message = err.error.message;
+            } else if (err?.error instanceof ReadableStream) {
+              const reader = err.error.getReader();
+              const decoder = new TextDecoder();
+              let result = '';
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                result += decoder.decode(value);
+              }
+              const parsed = JSON.parse(result);
+              message = parsed.message || message;
+            } else if (typeof err?.error === 'string') {
+              const parsed = JSON.parse(err.error);
+              message = parsed.message || message;
+            }
+          } catch (e) {
+            console.error('Error parsing error response:', e);
+          }
+      
+          this.bookingError = message;
+          this.isSubmitting = false;
+          this.cdr.detectChanges();
+        });
       }
     });
   }
@@ -230,23 +339,25 @@ export class AppointmentBookingComponent implements OnInit {
     this.availableSlots = [];
     this.bookedSlots = [];
     this.slotError = '';
-    this.cdr.detectChanges();
   }
 
   dismissSuccess(): void {
-    this.bookingSuccess = false;
-    this.cdr.detectChanges();
+    this.zone.run(() => {
+      this.bookingSuccess = false;
+    });
+  }
+
+  getFormattedDate(): string {
+    if (!this.selectedDate) return '';
+    const dateObj = new Date(this.selectedDate + 'T00:00:00');
+    return dateObj.toLocaleDateString('en-US', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
   }
 
   getSelectedDayName(): string {
     if (!this.selectedDate) return '';
     const dateObj = new Date(this.selectedDate + 'T00:00:00');
     return dateObj.toLocaleDateString('en-US', { weekday: 'long' });
-  }
-
-  getFormattedDate(): string {
-    if (!this.selectedDate) return '';
-    const dateObj = new Date(this.selectedDate + 'T00:00:00');
-    return dateObj.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   }
 }

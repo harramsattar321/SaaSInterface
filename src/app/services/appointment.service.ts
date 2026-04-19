@@ -29,7 +29,7 @@ export interface TimeSlot {
 export interface Appointment {
   id?: number;
   doctorId: number;
-  patientName: string;       // this is actually patientId / userId
+  patientName: string; // this is actually patientId / userId
   appointmentDate: string;
   time: string;
   priority: string;
@@ -37,12 +37,11 @@ export interface Appointment {
 }
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class AppointmentService {
-
   private hospitalApi = 'http://127.0.0.1:3000';
-  private patientApi  = 'http://127.0.0.1:8000';
+  private patientApi = 'http://127.0.0.1:8000';
 
   constructor(private http: HttpClient) {}
 
@@ -53,14 +52,26 @@ export class AppointmentService {
   getAllDoctors(): Observable<Doctor[]> {
     if (!this.doctors$) {
       this.doctors$ = this.http.get<any>(`${this.hospitalApi}/api/doctors`).pipe(
-        map(res => {
+        map((res) => {
           // handle both: plain array OR { data: [] }
-          return Array.isArray(res) ? res : (res.data ?? []);
+          return Array.isArray(res) ? res : res.data ?? [];
         }),
         shareReplay(1)
       );
     }
     return this.doctors$;
+  }
+
+  private handleError(err: any): string {
+    if (err?.error?.message) return err.error.message;
+    if (typeof err?.error === 'string') {
+      try {
+        return JSON.parse(err.error).message;
+      } catch {
+        return err.error;
+      }
+    }
+    return 'Failed to book appointment. Please try again.';
   }
 
   getDoctorById(id: number): Observable<Doctor> {
@@ -84,11 +95,9 @@ export class AppointmentService {
    * patientName field in the DB actually stores the userId (e.g. "PAT1765520117599942").
    */
   getAppointmentsByPatient(patientId: string): Observable<Appointment[]> {
-    return this.http.get<any>(
-      `${this.hospitalApi}/api/appointments?patientName=${patientId}`
-    ).pipe(
+    return this.http.get<any>(`${this.hospitalApi}/api/appointments?patientName=${patientId}`).pipe(
       // Handle both { data: [...] } and plain array responses
-      map(res => Array.isArray(res) ? res : (res.data ?? res))
+      map((res) => (Array.isArray(res) ? res : res.data ?? res))
     );
   }
 
@@ -97,10 +106,9 @@ export class AppointmentService {
    * Sends a PATCH to update status to 'cancelled'.
    */
   cancelAppointment(appointmentId: number): Observable<any> {
-    return this.http.patch(
-      `${this.hospitalApi}/api/appointments/${appointmentId}`,
-      { status: 'cancelled' }
-    );
+    return this.http.patch(`${this.hospitalApi}/api/appointments/${appointmentId}`, {
+      status: 'cancelled',
+    });
   }
 
   /**

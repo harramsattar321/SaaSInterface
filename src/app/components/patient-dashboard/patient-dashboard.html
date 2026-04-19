@@ -73,7 +73,7 @@
               </span>
             </div>
             <div class="next-actions">
-              <button class="mini-btn danger" (click)="confirmCancel(nextAppointment)">Cancel appointment</button>
+              <button class="mini-btn accent" (click)="confirmCancel(nextAppointment)">Cancel appointment</button>
               <button class="mini-btn accent" (click)="openReschedule(nextAppointment)">Reschedule</button>
             </div>
           </div>
@@ -237,29 +237,62 @@
 
       @if (!rescheduleSuccess) {
         <p class="modal-sub">
-          Pick a new time for your appointment with
-          <strong>{{ rescheduleTarget?.doctor?.name }}</strong>.
+          Rescheduling with <strong>{{ rescheduleTarget?.doctor?.name }}</strong>.
+          Pick a new date and time below.
         </p>
 
-        @if (availableSlots.length > 0) {
-          <div class="slots-container">
-            @for (slot of availableSlots; track slot.date + slot.time) {
-              <div class="slot-pill" [class.selected]="selectedSlot === slot" (click)="selectedSlot = slot">
-                {{ slot.display }}
+        <!-- Step 1: Date picker -->
+        <div class="reschedule-field">
+          <label class="reschedule-label">Select a date</label>
+          <input
+            type="date"
+            class="reschedule-date-input"
+            [min]="rescheduleMinDate"
+            [value]="rescheduleDate"
+            (change)="onRescheduleDateChange(($event.target)['value'])"
+          />
+          @if (rescheduleDate && rescheduleDayError) {
+            <p class="reschedule-day-error">{{ rescheduleDayError }}</p>
+          }
+        </div>
+
+        <!-- Step 2: Time slots -->
+        @if (rescheduleDate && !rescheduleDayError) {
+          <div class="reschedule-field">
+            <label class="reschedule-label">Available time slots</label>
+
+            @if (isLoadingRescheduleSlots) {
+              <div class="slots-loading">
+                <div class="pulse-ring" style="width:20px;height:20px;border-width:2px;"></div>
+                <span>Checking availability…</span>
               </div>
             }
+
+            @if (!isLoadingRescheduleSlots && rescheduleTimeSlots.length > 0) {
+              <div class="reschedule-slots-grid">
+                @for (slot of rescheduleTimeSlots; track slot) {
+                  <div
+                    class="reschedule-slot"
+                    [class.selected]="selectedRescheduleSlot === slot"
+                    (click)="selectedRescheduleSlot = slot">
+                    {{ slot }}
+                  </div>
+                }
+              </div>
+            }
+
+            @if (!isLoadingRescheduleSlots && rescheduleTimeSlots.length === 0) {
+              <p class="no-slots-msg">No available slots on this date. Try another day.</p>
+            }
           </div>
-        } @else {
-          <p class="no-slots-msg">No available slots in the next 14 days.</p>
         }
 
         <div class="modal-footer">
           <button class="modal-btn cancel-modal-btn" (click)="closeModal()">Go back</button>
           <button
             class="modal-btn confirm-modal-btn"
-            [disabled]="!selectedSlot || rescheduleLoading"
-            (click)="confirmReschedule()"
-          >
+            [disabled]="!selectedRescheduleSlot || rescheduleLoading"
+            (click)="confirmReschedule()">
             {{ rescheduleLoading ? 'Saving…' : 'Confirm reschedule' }}
           </button>
         </div>

@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ModelService } from '../../services/model.service';
 import { Subscription } from 'rxjs';
 import { ChatService } from '../../services/chat.services';
+import { Router, RouterModule } from '@angular/router';
 
 interface Message {
   id: number;
@@ -26,7 +27,7 @@ interface Message {
   templateUrl: './chat-area.component.html',
   styleUrls: ['./chat-area.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule]
+  imports: [CommonModule, FormsModule, RouterModule],
 })
 export class ChatAreaComponent implements OnInit, OnDestroy {
   messages: Message[] = [];
@@ -64,33 +65,33 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
   constructor(
     private modelService: ModelService,
     private chatService: ChatService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private router: Router
   ) {}
 
   // ─── Lifecycle ─────────────────────────────────────────────────────────────
 
   ngOnInit() {
-    this.modelSubscription = this.modelService.selectedModel$.subscribe(
-      model => { this.selectedModel = model; }
-    );
+    this.modelSubscription = this.modelService.selectedModel$.subscribe((model) => {
+      this.selectedModel = model;
+    });
 
     // ✅ REMOVED: loadChatList() — sidebar handles this exclusively
 
-    this.activeChatSubscription = this.chatService.activeChatId$.subscribe(
-      chatId => {
-        if (!chatId) {
-          this.currentChatId = null;
-          this.messages = [];
-          this.cdr.detectChanges();
-        } else if (chatId !== this.currentChatId) {
-          if (this.isLoading) {
-            this.currentChatId = chatId;
-          } else {
-            this.openChat(chatId);
-          }
-        }
+    this.activeChatSubscription = this.chatService.activeChatId$.subscribe((chatId) => {
+      if (!chatId) {
+        this.currentChatId = null;
+        this.messages = [];
+        this.cdr.detectChanges();
+        return;
       }
-    );
+
+      // Same chat — do nothing
+      if (chatId === this.currentChatId) return;
+
+      // Different chat — load immediately, no conditions
+      this.openChat(chatId);
+    });
   }
 
   ngOnDestroy() {
@@ -103,28 +104,42 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
 
   // ─── Chat Loading ──────────────────────────────────────────────────────────
 
+  goToDashboard(): void {
+    this.router.navigate(['/dashboard']);
+  }
+
+  goToBookAppointment(): void {
+    this.router.navigate(['/appointment']);
+  }
+
+  sendSuggestion(text: string): void {
+    this.userInput = text;
+    this.sendMessage();
+  }
+
   private openChat(chatId: string) {
+    this.currentChatId = chatId; // set ID immediately so duplicate calls are blocked
     this.isLoadingChat = true;
-    this.messages = [];
+    // DON'T clear messages yet — keep showing current chat while new one loads
     this.cdr.detectChanges();
 
     this.chatService.loadChat(chatId).subscribe({
-      next: res => {
-        this.currentChatId = chatId;
-        this.isLoadingChat = false;
-        this.messages = res.chat.messages.map(m => ({
+      next: (res) => {
+        // Only NOW swap the messages — no welcome screen flash
+        this.messages = res.chat.messages.map((m) => ({
           id: this.messageIdCounter++,
           text: m.content,
           isUser: m.role === 'user',
-          timestamp: new Date(m.timestamp ?? Date.now())
+          timestamp: new Date(m.timestamp ?? Date.now()),
         }));
+        this.isLoadingChat = false;
         this.cdr.detectChanges();
       },
-      error: err => {
+      error: (err) => {
         console.error('Failed to load chat:', err);
         this.isLoadingChat = false;
         this.cdr.detectChanges();
-      }
+      },
     });
   }
 
@@ -140,7 +155,7 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
       id: this.messageIdCounter++,
       text: messageText || 'File attached',
       isUser: true,
-      timestamp: new Date()
+      timestamp: new Date(),
     };
     this.messages.push(userMessage);
     this.userInput = '';
@@ -149,15 +164,15 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
 
     if (!this.currentChatId) {
       this.chatService.createNewChat().subscribe({
-        next: res => {
+        next: (res) => {
           this.currentChatId = res.chat.chatId;
           this.dispatchMessage(messageText);
         },
-        error: err => {
+        error: (err) => {
           console.error('Failed to create chat session:', err);
           this.isLoading = false;
           this.cdr.detectChanges();
-        }
+        },
       });
     } else {
       this.dispatchMessage(messageText);
@@ -170,7 +185,7 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
     this.chatService.saveMessage(chatId, 'user', messageText).subscribe({
       next: () => {
         this.chatService.sendMessage(messageText).subscribe({
-          next: res => {
+          next: (res) => {
             this.isLoading = false;
             const replyText = res.reply;
 
@@ -178,7 +193,7 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
               id: this.messageIdCounter++,
               text: replyText,
               isUser: false,
-              timestamp: new Date()
+              timestamp: new Date(),
             };
             this.messages.push(aiMessage);
             this.cdr.detectChanges();
@@ -186,43 +201,44 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
             // ✅ saveMessage() tap() in ChatService automatically
             // updates sidebar title + moves chat to top
             this.chatService.saveMessage(chatId, 'assistant', replyText).subscribe({
-              error: err => console.error('Failed to save assistant reply:', err)
+              error: (err) => console.error('Failed to save assistant reply:', err),
             });
           },
-          error: err => {
+          error: (err) => {
             this.isLoading = false;
-            const errMsg = err.status === 401
-              ? 'Session expired. Please log in again.'
-              : 'Something went wrong. Please try again.';
+            const errMsg =
+              err.status === 401
+                ? 'Session expired. Please log in again.'
+                : 'Something went wrong. Please try again.';
             this.messages.push({
               id: this.messageIdCounter++,
               text: errMsg,
               isUser: false,
-              timestamp: new Date()
+              timestamp: new Date(),
             });
             this.cdr.detectChanges();
-          }
+          },
         });
       },
-      error: err => {
+      error: (err) => {
         console.error('Failed to save user message:', err);
         this.chatService.sendMessage(messageText).subscribe({
-          next: res => {
+          next: (res) => {
             this.isLoading = false;
             this.messages.push({
               id: this.messageIdCounter++,
               text: res.reply,
               isUser: false,
-              timestamp: new Date()
+              timestamp: new Date(),
             });
             this.cdr.detectChanges();
           },
           error: () => {
             this.isLoading = false;
             this.cdr.detectChanges();
-          }
+          },
         });
-      }
+      },
     });
   }
 
@@ -235,7 +251,7 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
   }
 
   saveEdit() {
-    const index = this.messages.findIndex(m => m.id === this.editingMessageId);
+    const index = this.messages.findIndex((m) => m.id === this.editingMessageId);
     if (index !== -1) {
       this.messages[index].text = this.editingText.trim();
     }
@@ -284,7 +300,7 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
 
       this.mediaStream = stream;
@@ -339,7 +355,6 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
       }, 1000);
 
       this.animateFrequencyBars();
-
     } catch (error: any) {
       console.error('Error starting recording:', error);
       alert('Could not access microphone or start speech recognition.');
@@ -357,11 +372,13 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
     const animate = () => {
       if (!this.isRecording || !this.analyser) return;
       this.analyser.getByteFrequencyData(dataArray);
-      this.frequencyBars = Array(30).fill(0).map((_, index) => {
-        const dataIndex = Math.floor((index / 30) * bufferLength);
-        const value = dataArray[dataIndex] || 0;
-        return Math.max(20, (value / 255) * 100);
-      });
+      this.frequencyBars = Array(30)
+        .fill(0)
+        .map((_, index) => {
+          const dataIndex = Math.floor((index / 30) * bufferLength);
+          const value = dataArray[dataIndex] || 0;
+          return Math.max(20, (value / 255) * 100);
+        });
       this.cdr.detectChanges();
       this.animationFrameId = requestAnimationFrame(animate);
     };
@@ -401,7 +418,7 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
 
   private cleanupAudioResources() {
     if (this.mediaStream) {
-      this.mediaStream.getTracks().forEach(track => track.stop());
+      this.mediaStream.getTracks().forEach((track) => track.stop());
       this.mediaStream = null;
     }
     if (this.microphone) {

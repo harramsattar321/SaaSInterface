@@ -184,7 +184,7 @@
   border: 1px solid transparent;
 }
 .mini-btn.danger {
-  background: rgba(239,68,68,0.12); color: #fca5a5;
+  background: white; color: #fca5a5;
   border-color: rgba(239,68,68,0.25);
 }
 .mini-btn.danger:hover { background: rgba(239,68,68,0.22); }
@@ -499,6 +499,88 @@
 @keyframes popIn {
   from { transform: scale(0.6); opacity: 0; }
   to   { transform: scale(1);   opacity: 1; }
+}
+
+/* ── Reschedule modal fields ──────────────────────────── */
+.reschedule-field {
+  margin-bottom: 20px;
+}
+
+.reschedule-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.reschedule-date-input {
+  width: 100%;
+  padding: 10px 13px;
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--white);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.reschedule-date-input:focus {
+  border-color: var(--blue-light);
+}
+
+.reschedule-day-error {
+  font-size: 13px;
+  color: var(--rose);
+  background: var(--rose-pale);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-top: 8px;
+}
+
+.reschedule-slots-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px;
+}
+
+.reschedule-slot {
+  padding: 9px 6px;
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  background: var(--white);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ink2);
+  text-align: center;
+  font-weight: 500;
+  transition: all 0.12s;
+}
+
+.reschedule-slot:hover {
+  border-color: var(--blue-light);
+  background: var(--blue-pale);
+  color: var(--navy-mid);
+}
+
+.reschedule-slot.selected {
+  border-color: var(--navy-mid);
+  background: var(--navy-mid);
+  color: var(--white);
+  font-weight: 600;
+}
+
+.slots-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--ink3);
+  padding: 8px 0;
 }
 
 /* ── Responsive ───────────────────────────────────────── */
