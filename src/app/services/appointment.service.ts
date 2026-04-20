@@ -3,8 +3,9 @@
 
 import { map, shareReplay } from 'rxjs/operators';
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient,HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
+
 
 export interface Doctor {
   id: number;
@@ -49,6 +50,7 @@ export class AppointmentService {
 
   // ── Existing methods (unchanged) ──────────────────────────
 
+  
   getAllDoctors(): Observable<Doctor[]> {
     if (!this.doctors$) {
       this.doctors$ = this.http.get<any>(`${this.hospitalApi}/api/doctors`).pipe(
@@ -79,11 +81,23 @@ export class AppointmentService {
   }
 
   getAppointmentsByDoctorAndDate(doctorId: number, date: string): Observable<Appointment[]> {
-  return this.http.get<any>(
-    `${this.hospitalApi}/api/appointments?doctorId=${doctorId}&date=${date}`
-  ).pipe(
-    map((res) => Array.isArray(res) ? res : res.data ?? [])
-  );
+    return this.http.get<any>(
+      `${this.hospitalApi}/api/appointments?doctorId=${doctorId}&date=${date}`
+    ).pipe(
+      map((res) => Array.isArray(res) ? res : res.data ?? [])
+    );
+  }
+
+  sendReminder(payload: {
+  appointmentId: number;
+  patientId: string;
+  appointmentTime: string;
+  appointmentDate: string;
+  doctorName: string;
+}): Observable<any> {
+  const token = localStorage.getItem('token') ?? '';
+  const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
+  return this.http.post('http://localhost:8000/api/reminders/send-reminder', payload, { headers });
 }
 
   bookAppointment(appointment: Appointment): Observable<Appointment> {

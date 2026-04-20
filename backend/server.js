@@ -172,8 +172,8 @@ function generateChatTitle(firstUserMessage, existingTitles = []) {
 
   // ── RESCHEDULE ────────────────────────────────────────────────────────────
   if (/reschedul/i.test(msg)) {
-    if (/appointment/i.test(msg))    return uniqueTitle('Rescheduling an Appointment', existingTitles);
-    if (/doctor|dr\.?/i.test(msg))   return uniqueTitle('Rescheduling Doctor Visit', existingTitles);
+    if (/appointment/i.test(msg)) return uniqueTitle('Rescheduling an Appointment', existingTitles);
+    if (/doctor|dr\.?/i.test(msg)) return uniqueTitle('Rescheduling Doctor Visit', existingTitles);
     return uniqueTitle('Rescheduling Request', existingTitles);
   }
 
@@ -190,8 +190,8 @@ function generateChatTitle(firstUserMessage, existingTitles = []) {
 
   // ── DOCTOR AVAILABILITY ───────────────────────────────────────────────────
   if (/\b(available|availability|free|open)\b.*\b(doctor|dr\.?|specialist)/i.test(msg) ||
-      /\b(doctor|dr\.?|specialist)\b.*\b(available|availability|free|open)/i.test(msg) ||
-      /what doctors are available/i.test(msg)) {
+    /\b(doctor|dr\.?|specialist)\b.*\b(available|availability|free|open)/i.test(msg) ||
+    /what doctors are available/i.test(msg)) {
     const dayMatch = msg.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|this week|next week|weekend)\b/i);
     if (dayMatch) return uniqueTitle(`Doctor Availability — ${toTitleCase(dayMatch[1])}`, existingTitles);
     return uniqueTitle('Doctor Availability', existingTitles);
@@ -200,8 +200,8 @@ function generateChatTitle(firstUserMessage, existingTitles = []) {
   // ── APPOINTMENT STATUS ────────────────────────────────────────────────────
   if (/\b(appointment|visit)\b/i.test(msg)) {
     if (/confirm|confirmation/i.test(msg)) return uniqueTitle('Appointment Confirmation', existingTitles);
-    if (/status|update/i.test(msg))        return uniqueTitle('Appointment Status Update', existingTitles);
-    if (/remind|reminder/i.test(msg))      return uniqueTitle('Appointment Reminder', existingTitles);
+    if (/status|update/i.test(msg)) return uniqueTitle('Appointment Status Update', existingTitles);
+    if (/remind|reminder/i.test(msg)) return uniqueTitle('Appointment Reminder', existingTitles);
     if (/upcoming|next|future/i.test(msg)) return uniqueTitle('Upcoming Appointment', existingTitles);
     return uniqueTitle('Appointment Enquiry', existingTitles);
   }
@@ -209,8 +209,8 @@ function generateChatTitle(firstUserMessage, existingTitles = []) {
   // ── INSURANCE ─────────────────────────────────────────────────────────────
   if (/insurance/i.test(msg)) {
     if (/accept|support|partner|cover|network/i.test(msg)) return uniqueTitle('Accepted Insurance Providers', existingTitles);
-    if (/claim/i.test(msg))                                return uniqueTitle('Insurance Claim Help', existingTitles);
-    if (/cost|price|fee|pay/i.test(msg))                   return uniqueTitle('Insurance Coverage & Costs', existingTitles);
+    if (/claim/i.test(msg)) return uniqueTitle('Insurance Claim Help', existingTitles);
+    if (/cost|price|fee|pay/i.test(msg)) return uniqueTitle('Insurance Coverage & Costs', existingTitles);
     return uniqueTitle('Insurance Enquiry', existingTitles);
   }
 
@@ -294,7 +294,7 @@ function uniqueTitle(title, existingTitles) {
 }
 
 function toTitleCase(str) {
-  const lowers = new Set(['a','an','the','and','but','or','for','nor','on','at','to','by','in','of','up','as','is','it']);
+  const lowers = new Set(['a', 'an', 'the', 'and', 'but', 'or', 'for', 'nor', 'on', 'at', 'to', 'by', 'in', 'of', 'up', 'as', 'is', 'it']);
   return str
     .toLowerCase()
     .replace(/[?.!]+$/, '')
@@ -317,7 +317,7 @@ function fallbackTitle(msg) {
 }
 
 function toTitleCase(str) {
-  const lowers = new Set(['a','an','the','and','but','or','for','nor','on','at','to','by','in','of','up','as','is','it']);
+  const lowers = new Set(['a', 'an', 'the', 'and', 'but', 'or', 'for', 'nor', 'on', 'at', 'to', 'by', 'in', 'of', 'up', 'as', 'is', 'it']);
   return str
     .toLowerCase()
     .replace(/[?.!]+$/, '')
@@ -795,7 +795,118 @@ app.delete('/api/chats/:chatId', authenticateToken, async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error deleting chat' });
   }
 });
+// ============================================
+// ROUTE — APPOINTMENT REMINDER EMAIL
+// ============================================
 
+app.post('/api/reminders/send-reminder', authenticateToken, async (req, res) => {
+  try {
+    const { appointmentId, patientId, appointmentTime, appointmentDate, doctorName } = req.body;
+
+    // Fetch patient email from our own DB
+    const patient = await Patient.findOne({ userId: patientId })
+      .select('firstName lastName email')
+      .lean()
+      .exec();
+
+    if (!patient || !patient.email) {
+      return res.status(404).json({ success: false, message: 'Patient email not found' });
+    }
+
+    const fullName = `${patient.firstName} ${patient.lastName}`;
+
+    await transporter.sendMail({
+      from: `"Virtual Hospital Care Team" <${EMAIL_USER}>`,
+      to: patient.email,
+      subject: `Your Appointment is in 2 Hours — Virtual Hospital (#${appointmentId})`,
+      html: `
+    <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto; border: 1px solid #c7d9ff; border-radius: 14px; overflow: hidden;">
+
+      <!-- Header Banner -->
+      <div style="background: #0d3b66; padding: 22px 28px;">
+        <h2 style="color: #ffffff; margin: 0 0 4px; font-size: 18px;">Virtual Hospital</h2>
+        <p style="color: rgba(255,255,255,0.7); margin: 0; font-size: 12px;">Your health is our priority</p>
+      </div>
+
+      <!-- Body -->
+      <div style="padding: 26px 28px; background: #ffffff;">
+
+        <!-- Title + Urgency Badge -->
+        <h3 style="color: #0d3b66; margin: 0 0 8px;">Appointment Reminder</h3>
+        <span style="display: inline-block; background: #fff3e0; color: #e65100; font-size: 11px; font-weight: bold; border-radius: 20px; padding: 3px 12px; margin-bottom: 18px;">
+          &#9679; In 2 Hours
+        </span>
+
+        <p style="color: #333; margin: 0 0 10px;">Dear <strong>${fullName}</strong>,</p>
+        <p style="color: #555; line-height: 1.7; margin: 0 0 20px; font-size: 14px;">
+          We hope you're doing well! This is a friendly reminder from <strong>Virtual Hospital</strong> that your upcoming appointment is just <strong>2 hours away</strong>. Our team is all set to welcome you and is committed to providing you with the best care possible.
+        </p>
+
+        <!-- Appointment Details Table -->
+        <div style="background: #f7faff; border: 1px solid #c7d9ff; border-radius: 10px; overflow: hidden; margin-bottom: 20px;">
+          <div style="background: #e8f0fe; padding: 8px 16px; border-bottom: 1px solid #c7d9ff;">
+            <p style="font-size: 11px; font-weight: bold; color: #0d3b66; margin: 0; text-transform: uppercase; letter-spacing: 0.05em;">Appointment Details</p>
+          </div>
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <tr style="border-bottom: 1px solid #dce8ff; background: #f7faff;">
+              <td style="padding: 10px 16px; color: #555; width: 40%;">Doctor</td>
+              <td style="padding: 10px 16px; color: #0d3b66; font-weight: bold;">${doctorName}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #dce8ff; background: #ffffff;">
+              <td style="padding: 10px 16px; color: #555;">Date</td>
+              <td style="padding: 10px 16px; color: #0d3b66; font-weight: bold;">${appointmentDate}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #dce8ff; background: #f7faff;">
+              <td style="padding: 10px 16px; color: #555;">Time</td>
+              <td style="padding: 10px 16px; color: #0d3b66; font-weight: bold;">${appointmentTime}</td>
+            </tr>
+            <tr style="background: #ffffff;">
+              <td style="padding: 10px 16px; color: #555;">Appointment ID</td>
+              <td style="padding: 10px 16px; color: #0d3b66; font-weight: bold;">#${appointmentId}</td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- Tip Cards -->
+<table style="width: 100%; border-collapse: collapse; margin-bottom: 22px;">
+  <tr>
+    <td style="width: 50%; padding-right: 8px;">
+      <div style="background: #e8f5e9; border-radius: 8px; padding: 10px 14px;">
+        <p style="font-size: 12px; font-weight: bold; color: #2e7d32; margin: 0 0 3px;">Arrive Early</p>
+        <p style="font-size: 12px; color: #388e3c; margin: 0;">Please be there <strong>10 minutes</strong> before your slot.</p>
+      </div>
+    </td>
+    <td style="width: 50%; padding-left: 8px;">
+      <div style="background: #fff8e1; border-radius: 8px; padding: 10px 14px;">
+        <p style="font-size: 12px; font-weight: bold; color: #f57f17; margin: 0 0 3px;">Bring Your Reports</p>
+        <p style="font-size: 12px; color: #f9a825; margin: 0;">Carry any previous test results or prescriptions.</p>
+      </div>
+    </td>
+  </tr>
+</table>
+
+        <!-- Regards -->
+        <hr style="border: none; border-top: 1px solid #eee; margin-bottom: 18px;">
+        <p style="color: #444; font-size: 14px; line-height: 1.7; margin: 0 0 10px;">
+          We look forward to seeing you and supporting your health journey. If you have any questions or concerns before your visit, please don't hesitate to reach out — we're always here to help.
+        </p>
+        <p style="color: #444; font-size: 14px; margin: 0 0 4px;">Warm regards,</p>
+        <p style="color: #0d3b66; font-weight: bold; font-size: 14px; margin: 0;">The Virtual Hospital Care Team</p>
+        <p style="color: #aaa; font-size: 12px; margin: 4px 0 0;">Virtual Patient Support System &bull; Caring for you, every step of the way.</p>
+
+      </div>
+    </div>
+  `
+    });
+    console.log(`✉️  2-hour reminder sent to: ${patient.email} for appointment #${appointmentId}`);
+
+    res.status(200).json({ success: true, message: 'Reminder email sent successfully' });
+
+  } catch (error) {
+    console.error('❌ Reminder email error:', error);
+    res.status(500).json({ success: false, message: 'Failed to send reminder email' });
+  }
+});
 // ============================================
 // START SERVER
 // ============================================
@@ -816,5 +927,6 @@ app.listen(PORT, () => {
   console.log(`   GET   /api/chats`);
   console.log(`   GET   /api/chats/:chatId`);
   console.log(`   PUT   /api/chats/:chatId/rename`);
-  console.log(`   DELETE /api/chats/:chatId`);
+  console.log(`   DELETE /api/chats/:chatId`); console.log(`\n   REMINDER ROUTES (protected):`);
+  console.log(`   POST  /api/reminders/send-reminder`);
 });

@@ -31,6 +31,7 @@ export class PatientDashboard implements OnInit, OnDestroy {
 
   countdown = { days: 0, hours: 0, minutes: 0, seconds: 0 };
   private countdownInterval: any;
+  private reminderSent: boolean = false;
 
   // ── Reschedule state ──────────────────────────────────────
   showRescheduleModal: boolean = false;
@@ -145,26 +146,52 @@ export class PatientDashboard implements OnInit, OnDestroy {
 
   startCountdown(targetDate: Date): void {
     if (this.countdownInterval) clearInterval(this.countdownInterval);
+    this.reminderSent = false;
 
     const update = () => {
       const diff = targetDate.getTime() - new Date().getTime();
+
       if (diff <= 0) {
         this.countdown = { days: 0, hours: 0, minutes: 0, seconds: 0 };
         clearInterval(this.countdownInterval);
         this.cdr.detectChanges();
         return;
       }
+
       this.countdown = {
         days:    Math.floor(diff / (1000 * 60 * 60 * 24)),
         hours:   Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
         minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
         seconds: Math.floor((diff % (1000 * 60)) / 1000)
       };
+
+      if (!this.reminderSent && diff <= 2 * 60 * 60 * 1000) {
+        this.reminderSent = true;
+        this.triggerReminderEmail();
+      }
+
       this.cdr.detectChanges();
     };
 
     update();
     this.countdownInterval = setInterval(update, 1000);
+  }
+
+  private triggerReminderEmail(): void {
+    if (!this.nextAppointment?.id) return;
+
+    const payload = {
+      appointmentId: this.nextAppointment.id,
+      patientId: this.patientId,
+      appointmentTime: this.nextAppointment.time,
+      appointmentDate: this.formatDate(this.nextAppointment.appointmentDate),
+      doctorName: this.nextAppointment.doctor?.name || 'Your Doctor'
+    };
+
+    this.appointmentService.sendReminder(payload).subscribe({
+      next: () => console.log('✅ 2-hour reminder email triggered'),
+      error: (err) => console.error('❌ Reminder failed:', err)
+    });
   }
 
   get filteredAppointments(): EnrichedAppointment[] {
