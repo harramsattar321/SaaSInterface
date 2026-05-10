@@ -32,7 +32,7 @@ export interface ReportAnalysis {
 
 @Injectable({ providedIn: 'root' })
 export class ChatService {
-  private nodeUrl = 'http://localhost:8000';
+  private nodeUrl = 'http://20.13.9.186/patient';
   private flaskUrl = 'http://localhost:5000';
 
   private activeChatIdSubject = new BehaviorSubject<string | null>(null);
