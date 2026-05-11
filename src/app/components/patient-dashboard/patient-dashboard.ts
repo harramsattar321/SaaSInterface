@@ -112,9 +112,18 @@ export class PatientDashboard implements OnInit, OnDestroy {
               statusLabel: this.getStatusLabel(appt.status || '', apptDate)
             };
           })
-          .sort((a, b) =>
-            new Date(a.appointmentDate).getTime() - new Date(b.appointmentDate).getTime()
-          );
+          // ✅ Upcoming always on top, then descending by date within each group
+          .sort((a, b) => {
+            const aIsUpcoming = !a.isPast && a.status !== 'cancelled';
+            const bIsUpcoming = !b.isPast && b.status !== 'cancelled';
+
+            // Upcoming group always comes before past/cancelled
+            if (aIsUpcoming && !bIsUpcoming) return -1;
+            if (!aIsUpcoming && bIsUpcoming) return 1;
+
+            // Within same group → descending by date (latest first)
+            return new Date(b.appointmentDate).getTime() - new Date(a.appointmentDate).getTime();
+          });
 
         const upcoming = this.appointments.filter(
           a => !a.isPast && a.status !== 'cancelled'
@@ -226,7 +235,6 @@ export class PatientDashboard implements OnInit, OnDestroy {
 
     this.appointmentService.cancelAppointment(this.cancelTarget.id).subscribe({
       next: () => {
-        // Update in-memory so UI reflects instantly without reload
         const appt = this.appointments.find(a => a.id === this.cancelTarget!.id);
         if (appt) {
           appt.status = 'cancelled';
@@ -285,7 +293,6 @@ export class PatientDashboard implements OnInit, OnDestroy {
     this.isLoadingRescheduleSlots = true;
     this.cdr.detectChanges();
 
-    // Fetch already booked slots for this doctor+date
     this.appointmentService.getAppointmentsByDoctorAndDate(
       doctor.id,
       date
@@ -294,7 +301,6 @@ export class PatientDashboard implements OnInit, OnDestroy {
         const bookedTimes = (bookedAppointments || []).map((a: any) => a.time);
         const allSlots = this.generateSlots(slotsForDay);
 
-        // Exclude the current appointment's slot so it doesn't block itself
         const currentTime = this.rescheduleTarget?.time || '';
         this.rescheduleTimeSlots = allSlots.filter(
           slot => !bookedTimes.includes(slot) || slot === currentTime
@@ -304,7 +310,6 @@ export class PatientDashboard implements OnInit, OnDestroy {
         this.cdr.detectChanges();
       },
       error: () => {
-        // If fetch fails, show all slots
         this.rescheduleTimeSlots = this.generateSlots(slotsForDay);
         this.isLoadingRescheduleSlots = false;
         this.cdr.detectChanges();
@@ -320,9 +325,9 @@ export class PatientDashboard implements OnInit, OnDestroy {
       let current = startH * 60 + startM;
       const end   = endH * 60 + endM;
       while (current + 15 <= end) {
-        const h       = Math.floor(current / 60);
-        const m       = current % 60;
-        const ampm    = h < 12 ? 'AM' : 'PM';
+        const h        = Math.floor(current / 60);
+        const m        = current % 60;
+        const ampm     = h < 12 ? 'AM' : 'PM';
         const displayH = h % 12 === 0 ? 12 : h % 12;
         const displayM = m.toString().padStart(2, '0');
         allSlots.push(`${displayH.toString().padStart(2, '0')}:${displayM} ${ampm}`);
@@ -337,9 +342,8 @@ export class PatientDashboard implements OnInit, OnDestroy {
     this.rescheduleLoading = true;
     this.cdr.detectChanges();
 
-    // Parse the selected slot time back into a full ISO date
-    const [time, ampm]   = this.selectedRescheduleSlot.split(' ');
-    const [h, m]         = time.split(':').map(Number);
+    const [time, ampm] = this.selectedRescheduleSlot.split(' ');
+    const [h, m]       = time.split(':').map(Number);
     let hours = h;
     if (ampm === 'PM' && h !== 12) hours += 12;
     if (ampm === 'AM' && h === 12) hours = 0;
@@ -376,14 +380,14 @@ export class PatientDashboard implements OnInit, OnDestroy {
   }
 
   closeModal(): void {
-    this.showRescheduleModal  = false;
-    this.showCancelConfirm    = false;
-    this.rescheduleTarget     = null;
-    this.cancelTarget         = null;
-    this.rescheduleDate       = '';
-    this.rescheduleTimeSlots  = [];
+    this.showRescheduleModal    = false;
+    this.showCancelConfirm      = false;
+    this.rescheduleTarget       = null;
+    this.cancelTarget           = null;
+    this.rescheduleDate         = '';
+    this.rescheduleTimeSlots    = [];
     this.selectedRescheduleSlot = '';
-    this.rescheduleDayError   = '';
+    this.rescheduleDayError     = '';
     this.cdr.detectChanges();
   }
 

@@ -97,7 +97,7 @@ export class AppointmentService {
 }): Observable<any> {
   const token = localStorage.getItem('token') ?? '';
   const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
-  return this.http.post('http://20.13.9.186/patient/api/reminders/send-reminder', payload, { headers });
+  return this.http.post('http://20.13.9.186.nip.io/patient/api/reminders/send-reminder', payload, { headers });
 }
 
   bookAppointment(appointment: Appointment): Observable<Appointment> {

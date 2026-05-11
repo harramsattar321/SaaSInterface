@@ -23,7 +23,7 @@ export class ResetPasswordComponent implements OnInit {
   showNew = false;
   showConfirm = false;
 
-  private apiUrl = 'http://20.13.9.186/patient/api';
+  private apiUrl = 'http://20.13.9.186.nip.io/patient/api';
 
   constructor(
     private route: ActivatedRoute,
