@@ -29,7 +29,7 @@ export class LoginComponent implements OnInit {
 
   private readonly LOGIN_TIMEOUT = 1000;
   private timeoutHandle: any;
-  private readonly apiUrl = 'http://20.13.9.186.nip.io/patient/api';
+  private readonly apiUrl = 'https://20-13-9-186.nip.io/patient/api';
 
   constructor(
     private authService: AuthService,
