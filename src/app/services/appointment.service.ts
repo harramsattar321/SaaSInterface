@@ -41,8 +41,8 @@ export interface Appointment {
   providedIn: 'root',
 })
 export class AppointmentService {
-  private hospitalApi = 'http://127.0.0.1:3000';
-  private patientApi = 'http://127.0.0.1:8000';
+  private hospitalApi = 'https://20-13-9-186.nip.io/hospital';
+  private patientApi = 'https://20-13-9-186.nip.io/patient';
 
   constructor(private http: HttpClient) {}
 
