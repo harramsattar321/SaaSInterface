@@ -33,7 +33,7 @@ export interface ReportAnalysis {
 @Injectable({ providedIn: 'root' })
 export class ChatService {
   private nodeUrl = 'https://20-13-9-186.nip.io/patient';
-  private flaskUrl = 'https://https://20-13-9-186.nip.io/ai';
+  private flaskUrl = 'https://20-13-9-186.nip.io/ai';
 
   private activeChatIdSubject = new BehaviorSubject<string | null>(null);
   activeChatId$ = this.activeChatIdSubject.asObservable();
