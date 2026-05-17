@@ -48,8 +48,6 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
 
   patientId: string = '';
 
-  isDetecting: boolean = false; // kept for template compatibility — always false now
-
   // ── Debounce cleanup only ─────────────────────────────────
   private destroy$ = new Subject<void>();
 
