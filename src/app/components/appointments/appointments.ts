@@ -5,7 +5,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
+import { takeUntil } from 'rxjs/operators';
 import { AppointmentService, Doctor, Appointment } from '../../services/appointment.service';
 
 @Component({
@@ -48,8 +48,9 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
 
   patientId: string = '';
 
-  // ── Debounce for reason input ─────────────────────────────
-  private reasonSubject = new Subject<string>();
+  isDetecting: boolean = false; // kept for template compatibility — always false now
+
+  // ── Debounce cleanup only ─────────────────────────────────
   private destroy$ = new Subject<void>();
 
   constructor(
@@ -62,7 +63,6 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
     this.loadPatientId();
     this.loadDoctors();
     this.setMinDate();
-    this.setupReasonDebounce();
   }
 
   ngOnDestroy(): void {
@@ -83,28 +83,6 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
   private setMinDate(): void {
     const today = new Date();
     this.minDate = today.toISOString().split('T')[0];
-  }
-
-  /**
-   * Debounce reason input — call detect after 600ms of no typing.
-   * Avoids hammering the API on every keystroke.
-   */
-  private setupReasonDebounce(): void {
-    this.reasonSubject.pipe(
-      debounceTime(600),
-      distinctUntilChanged(),
-      takeUntil(this.destroy$)
-    ).subscribe(reason => {
-      if (reason.trim().length >= 3) {
-        this.runEmergencyDetection(reason);
-      } else {
-        this.zone.run(() => {
-          this.isEmergency = false;
-          this.emergencyCategory = '';
-          this.isDetecting = false;
-        });
-      }
-    });
   }
 
   // ── Doctors ───────────────────────────────────────────────
@@ -257,33 +235,40 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
 
   // ── Reason / Emergency detection ──────────────────────────
 
-  /** Called on every keystroke in the reason textarea */
-  onReasonInput(): void {
-    this.isDetecting = this.reason.trim().length >= 3;
-    this.reasonSubject.next(this.reason);
+  // Full keyword list — mirrors emergency.routes.ts on the backend
+  private readonly EMERGENCY_KEYWORDS: Record<string, string[]> = {
+    cardiac:         ['heart attack','chest pain','chest tightness','cardiac arrest','heart pain','heart failure','palpitations','irregular heartbeat','angina','myocardial','heart pressure','left arm pain','jaw pain','shortness of breath','cant breathe',"can't breathe",'difficulty breathing','breathing difficulty','breathless'],
+    accident:        ['accident','car crash','road accident','vehicle accident','motorcycle accident','bike accident','hit by car','fell','fall','fallen','fracture','broken bone','broken arm','broken leg','head injury','head trauma','skull','concussion','trauma','bleeding','blood loss','heavy bleeding','wound','deep cut','laceration','internal bleeding'],
+    stroke:          ['stroke','paralysis','face drooping','arm weakness','leg weakness','speech problem','slurred speech','sudden headache','worst headache','vision loss','sudden vision','numbness','confusion','loss of balance','brain attack'],
+    unconscious:     ['unconscious','fainted','fainting','passed out','unresponsive','not responding','collapsed','blackout','loss of consciousness','dizzy and fell','dizziness'],
+    severe_pain:     ['severe pain','extreme pain','unbearable pain','sharp pain','stabbing pain','intense pain','excruciating','worst pain','severe abdominal pain','severe stomach pain','appendix'],
+    allergic:        ['allergic reaction','anaphylaxis','anaphylactic','swollen throat','throat closing','hives','swelling face','face swelling','epipen','bee sting','severe allergy'],
+    poisoning:       ['overdose','poisoning','poison','swallowed','ingested','drug overdose','medication overdose','toxic','chemical burn','burn','burnt','severe burn'],
+    other_emergency: ['emergency','urgent','critical','serious condition','life threatening','life-threatening','immediately','right now','help me','vomiting blood','blood in vomit','coughing blood','seizure','convulsion','epilepsy attack','high fever','fever 40','fever 41','fever 42'],
+  };
+
+  /** Detect emergency purely on the frontend — no network call, works on any deployment */
+  private detectEmergencyLocally(reason: string): { isEmergency: boolean; category: string } {
+    if (!reason || reason.trim().length < 3) return { isEmergency: false, category: '' };
+    const lower = reason.toLowerCase();
+    for (const [category, keywords] of Object.entries(this.EMERGENCY_KEYWORDS)) {
+      for (const kw of keywords) {
+        if (lower.includes(kw)) return { isEmergency: true, category };
+      }
+    }
+    return { isEmergency: false, category: '' };
   }
 
-  private runEmergencyDetection(reason: string): void {
-    this.appointmentService.detectEmergency(reason).subscribe({
-      next: (result) => {
-        this.zone.run(() => {
-          this.isEmergency = result.isEmergency;
-          this.emergencyCategory = result.category;
-          this.isDetecting = false;
-          // Clear slot selection when emergency is detected — not needed
-          if (this.isEmergency) {
-            this.selectedSlot = '';
-          }
-          this.cdr.detectChanges();
-        });
-      },
-      error: () => {
-        this.zone.run(() => {
-          // If detection fails, treat as normal — don't block booking
-          this.isEmergency = false;
-          this.isDetecting = false;
-        });
-      }
+  /** Called on every keystroke in the reason textarea */
+  onReasonInput(): void {
+    // Run detection synchronously — no API call, no spinner, instant result
+    const result = this.detectEmergencyLocally(this.reason);
+    this.zone.run(() => {
+      this.isEmergency     = result.isEmergency;
+      this.emergencyCategory = result.category;
+      this.isDetecting     = false;
+      if (this.isEmergency) this.selectedSlot = '';
+      this.cdr.detectChanges();
     });
   }
 
