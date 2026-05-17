@@ -907,6 +907,123 @@ app.post('/api/reminders/send-reminder', authenticateToken, async (req, res) => 
     res.status(500).json({ success: false, message: 'Failed to send reminder email' });
   }
 });
+// ============================================================
+// ADD THIS BLOCK to your backend/server.js (port 8000)
+// Place it just before the "START SERVER" section
+// ============================================================
+
+// ============================================================
+// ROUTE — EMERGENCY CANCELLATION EMAIL
+// Called internally by hospital backend (port 3000)
+// when an existing patient is bumped by an emergency case
+// ============================================================
+
+app.post('/api/notifications/cancellation-email', async (req, res) => {
+  try {
+    const { patientId, doctorName, appointmentDate, appointmentTime, appointmentId, reason } = req.body;
+
+    // Fetch patient from our DB using patientId (stored as userId)
+    const patient = await Patient.findOne({ userId: patientId })
+      .select('firstName lastName email')
+      .lean()
+      .exec();
+
+    if (!patient || !patient.email) {
+      console.warn(`⚠️  Cancellation email: patient not found for userId: ${patientId}`);
+      return res.status(404).json({ success: false, message: 'Patient not found' });
+    }
+
+    const fullName = `${patient.firstName} ${patient.lastName}`;
+
+    await transporter.sendMail({
+      from: `"Virtual Hospital Care Team" <${EMAIL_USER}>`,
+      to: patient.email,
+      subject: `Important: Your Appointment Has Been Rescheduled — Virtual Hospital (#${appointmentId})`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto; border: 1px solid #ffcccc; border-radius: 14px; overflow: hidden;">
+
+          <!-- Header -->
+          <div style="background: #c62828; padding: 22px 28px;">
+            <h2 style="color: #ffffff; margin: 0 0 4px; font-size: 18px;">Virtual Hospital</h2>
+            <p style="color: rgba(255,255,255,0.75); margin: 0; font-size: 12px;">Appointment Update Notice</p>
+          </div>
+
+          <!-- Body -->
+          <div style="padding: 26px 28px; background: #ffffff;">
+
+            <h3 style="color: #c62828; margin: 0 0 6px;">Your Appointment Has Been Cancelled</h3>
+            <span style="display: inline-block; background: #fff3e0; color: #e65100; font-size: 11px; font-weight: bold; border-radius: 20px; padding: 3px 12px; margin-bottom: 18px;">
+              &#9888; Action Required
+            </span>
+
+            <p style="color: #333; margin: 0 0 10px;">Dear <strong>${fullName}</strong>,</p>
+
+            <p style="color: #555; line-height: 1.7; margin: 0 0 16px; font-size: 14px;">
+              We sincerely apologise for the inconvenience. Your appointment has been
+              <strong>automatically cancelled</strong> due to an emergency medical case that
+              required urgent attention during your scheduled time slot.
+            </p>
+
+            <!-- Cancelled Appointment Details -->
+            <div style="background: #fff5f5; border: 1px solid #ffcccc; border-radius: 10px; overflow: hidden; margin-bottom: 20px;">
+              <div style="background: #ffebee; padding: 8px 16px; border-bottom: 1px solid #ffcccc;">
+                <p style="font-size: 11px; font-weight: bold; color: #c62828; margin: 0; text-transform: uppercase; letter-spacing: 0.05em;">Cancelled Appointment</p>
+              </div>
+              <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                <tr style="border-bottom: 1px solid #ffe0e0; background: #fff5f5;">
+                  <td style="padding: 10px 16px; color: #555; width: 40%;">Doctor</td>
+                  <td style="padding: 10px 16px; color: #c62828; font-weight: bold;">${doctorName}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #ffe0e0; background: #ffffff;">
+                  <td style="padding: 10px 16px; color: #555;">Date</td>
+                  <td style="padding: 10px 16px; color: #c62828; font-weight: bold;">${appointmentDate}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #ffe0e0; background: #fff5f5;">
+                  <td style="padding: 10px 16px; color: #555;">Time</td>
+                  <td style="padding: 10px 16px; color: #c62828; font-weight: bold;">${appointmentTime}</td>
+                </tr>
+                <tr style="background: #ffffff;">
+                  <td style="padding: 10px 16px; color: #555;">Appointment ID</td>
+                  <td style="padding: 10px 16px; color: #c62828; font-weight: bold;">#${appointmentId}</td>
+                </tr>
+              </table>
+            </div>
+
+            <!-- What to do next -->
+            <div style="background: #e8f5e9; border-radius: 10px; padding: 16px 18px; margin-bottom: 20px;">
+              <p style="font-size: 13px; font-weight: bold; color: #2e7d32; margin: 0 0 8px;">&#10003; What to do next</p>
+              <ul style="color: #388e3c; font-size: 13px; margin: 0; padding-left: 18px; line-height: 1.8;">
+                <li>Please log in to the patient portal and book a new appointment.</li>
+                <li>All your original appointment details are saved — just pick a new slot.</li>
+                <li>If this is urgent, please call our helpline or visit us directly.</li>
+              </ul>
+            </div>
+
+            <hr style="border: none; border-top: 1px solid #eee; margin-bottom: 18px;">
+
+            <p style="color: #444; font-size: 14px; line-height: 1.7; margin: 0 0 10px;">
+              We truly value your time and trust in our hospital. We understand this is an
+              inconvenience and we deeply apologise. Our team is available to help you
+              reschedule at your earliest convenience.
+            </p>
+
+            <p style="color: #444; font-size: 14px; margin: 0 0 4px;">Warm regards,</p>
+            <p style="color: #0d3b66; font-weight: bold; font-size: 14px; margin: 0;">The Virtual Hospital Care Team</p>
+            <p style="color: #aaa; font-size: 12px; margin: 4px 0 0;">Virtual Patient Support System &bull; Caring for you, every step of the way.</p>
+
+          </div>
+        </div>
+      `,
+    });
+
+    console.log(`✉️  Cancellation email sent to: ${patient.email} (bumped appointment #${appointmentId})`);
+    return res.status(200).json({ success: true, message: 'Cancellation email sent' });
+
+  } catch (error) {
+    console.error('❌ Cancellation email error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to send cancellation email' });
+  }
+});
 // ============================================
 // START SERVER
 // ============================================

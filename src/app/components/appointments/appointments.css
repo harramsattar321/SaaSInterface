@@ -321,11 +321,11 @@
   border-color: #3B7A99;
 }
 
-.booking-summary {
+.booking-summary,.emergency-summary {
   margin-bottom: 1.1rem;
 }
 
-.booking-summary h4 {
+.booking-summary.emergency-summary h4 {
   font-size: 0.95rem;
   font-weight: 700;
   color: #1F4E79;
@@ -635,7 +635,761 @@
   font-size: 13px;
   animation: showHalfway 10s step-end infinite;
 }
+/* ============================================================
+   ADD THESE STYLES to your existing appointments.css
+   These are new classes only — nothing existing is changed
+   ============================================================ */
 
+/* Optional tag next to step label */
+.optional-tag {
+  font-size: 11px;
+  font-weight: 400;
+  color: #888;
+  background: #f0f0f0;
+  border-radius: 10px;
+  padding: 2px 8px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* Reason textarea */
+.reason-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid #c7d9ff;
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #333;
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.reason-input:focus {
+  outline: none;
+  border-color: #0d3b66;
+}
+
+/* Detecting spinner row */
+.detecting-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: #888;
+  font-size: 13px;
+}
+
+/* 🚨 Emergency detected banner */
+.emergency-banner {
+  display: flex;
+  gap: 14px;
+  background: #fff5f5;
+  border: 1.5px solid #ffcccc;
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 12px;
+  animation: pulse-border 1.5s infinite;
+}
+
+@keyframes pulse-border {
+  0%, 100% { border-color: #ffcccc; }
+  50%       { border-color: #e53935; }
+}
+
+.emergency-icon {
+  font-size: 26px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.emergency-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.emergency-text strong {
+  color: #c62828;
+  font-size: 14px;
+}
+
+.emergency-text span {
+  color: #555;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.emergency-note {
+  color: #888 !important;
+  font-size: 12px !important;
+  margin-top: 4px;
+}
+
+/* ✅ Normal booking indicator */
+.normal-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: #2e7d32;
+  font-size: 13px;
+}
+
+.normal-dot {
+  color: #43a047;
+  font-size: 10px;
+}
+
+/* Emergency booking summary 
+.emergency-summary {
+  border: 1.5px solid #ffcccc !important;
+  background: blue !important;
+}*/
+
+.priority-badge {
+  display: inline-block;
+  background: #e53935;
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+  border-radius: 20px;
+  padding: 4px 14px;
+  margin-bottom: 12px;
+  letter-spacing: 0.05em;
+}
+
+.emergency-priority {
+  color: #c62828 !important;
+  font-weight: bold !important;
+}
+
+/* Emergency confirm button */
+.emergency-btn {
+  background: linear-gradient(135deg, #e53935, #b71c1c) !important;
+  animation: pulse-btn 2s infinite;
+}
+
+.emergency-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #b71c1c, #e53935) !important;
+}
+
+@keyframes pulse-btn {
+  0%, 100% { box-shadow: 0 4px 15px rgba(229,57,53,0.4); }
+  50%       { box-shadow: 0 4px 25px rgba(229,57,53,0.7); }
+}
+
+/* Emergency how-step */
+.emergency-how-step .how-num.emergency-num {
+  background: #ffebee !important;
+  color: #c62828 !important;
+  font-size: 16px;
+}
+
+/* Emergency info card (sidebar) */
+.emergency-info-card {
+  background: #fff5f5;
+  border: 1px solid #ffcccc;
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+
+.emergency-info-card h4 {
+  color: #c62828;
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+
+.emergency-info-card ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #555;
+  font-size: 13px;
+  line-height: 1.9;
+}
+
+.emergency-info-card ul strong {
+  color: #c62828;
+}
+
+/* Small spinner (inline) */
+.spinner-sm {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+/* 🏥 Doctor Unavailable — Visit Hospital banner */
+.hospital-banner {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  background: #1a237e;
+  border: 2px solid #3949ab;
+  border-radius: 14px;
+  padding: 20px 22px;
+  margin-bottom: 20px;
+  animation: pulse-blue 2s infinite;
+}
+
+@keyframes pulse-blue {
+  0%, 100% { border-color: #3949ab; box-shadow: 0 0 0 0 rgba(57,73,171,0.3); }
+  50%       { border-color: #7986cb; box-shadow: 0 0 0 6px rgba(57,73,171,0); }
+}
+
+.hospital-banner-icon {
+  font-size: 32px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.hospital-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.hospital-banner-text strong {
+  color: #ffffff;
+  font-size: 15px;
+}
+
+.hospital-banner-text span {
+  color: #c5cae9;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.hospital-urgent {
+  color: #ffcc80 !important;
+  font-size: 13px !important;
+  margin-top: 6px;
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 8px;
+  border-left: 3px solid #ffa726;
+}
+
+.hospital-urgent strong {
+  color: #ffa726 !important;
+}
+
+/* ============================================================
+   ADD THESE STYLES to your existing appointments.css
+   ============================================================ */
+
+/* Optional tag next to step label */
+.optional-tag {
+  font-size: 11px;
+  font-weight: 400;
+  color: #888;
+  background: #f0f0f0;
+  border-radius: 10px;
+  padding: 2px 8px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* Reason textarea */
+.reason-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid #c7d9ff;
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #333;
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.reason-input:focus {
+  outline: none;
+  border-color: #0d3b66;
+}
+
+/* Detecting spinner row */
+.detecting-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: #888;
+  font-size: 13px;
+}
+
+/* 🚨 Emergency detected banner */
+.emergency-banner {
+  display: flex;
+  gap: 14px;
+  background: #fff5f5;
+  border: 1.5px solid #ffcccc;
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 12px;
+  animation: pulse-border 1.5s infinite;
+}
+
+@keyframes pulse-border {
+  0%, 100% { border-color: #ffcccc; }
+  50%       { border-color: #e53935; }
+}
+
+.emergency-icon {
+  font-size: 26px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.emergency-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.emergency-text strong {
+  color: #c62828;
+  font-size: 14px;
+}
+
+.emergency-text span {
+  color: #555;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.emergency-note {
+  color: #888 !important;
+  font-size: 12px !important;
+  margin-top: 4px;
+}
+
+/* ✅ Normal booking indicator */
+.normal-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: #2e7d32;
+  font-size: 13px;
+}
+
+.normal-dot {
+  color: #43a047;
+  font-size: 10px;
+}
+
+/* Emergency booking summary 
+.emergency-summary {
+  border: 1.5px solid #ffcccc !important;
+  background: #fff5f5 !important;
+}*/
+
+.priority-badge {
+  display: inline-block;
+  background: #e53935;
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+  border-radius: 20px;
+  padding: 4px 14px;
+  margin-bottom: 12px;
+  letter-spacing: 0.05em;
+}
+
+.emergency-priority {
+  color: #c62828 !important;
+  font-weight: bold !important;
+}
+
+/* Emergency confirm button */
+.emergency-btn {
+  background: linear-gradient(135deg, #e53935, #b71c1c) !important;
+  animation: pulse-btn 2s infinite;
+}
+
+.emergency-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #b71c1c, #e53935) !important;
+}
+
+@keyframes pulse-btn {
+  0%, 100% { box-shadow: 0 4px 15px rgba(229,57,53,0.4); }
+  50%       { box-shadow: 0 4px 25px rgba(229,57,53,0.7); }
+}
+
+/* Emergency how-step */
+.emergency-how-step .how-num.emergency-num {
+  background: #ffebee !important;
+  color: #c62828 !important;
+  font-size: 16px;
+}
+
+/* Emergency info card (sidebar) */
+.emergency-info-card {
+  background: #fff5f5;
+  border: 1px solid #ffcccc;
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+
+.emergency-info-card h4 {
+  color: #c62828;
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+
+.emergency-info-card ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #555;
+  font-size: 13px;
+  line-height: 1.9;
+}
+
+.emergency-info-card ul strong {
+  color: #c62828;
+}
+
+/* Small spinner (inline) */
+.spinner-sm {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+/* 🏥 Doctor Unavailable — Modal Popup */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeInOverlay 0.2s ease;
+}
+
+@keyframes fadeInOverlay {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.modal-box {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 36px 32px 28px;
+  max-width: 420px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: slideUpModal 0.25s ease;
+}
+
+@keyframes slideUpModal {
+  from { transform: translateY(30px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.modal-icon {
+  font-size: 52px;
+  margin-bottom: 14px;
+  line-height: 1;
+}
+
+.modal-title {
+  color: #1a237e;
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 10px;
+}
+
+.modal-reason {
+  color: #555;
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0 0 18px;
+}
+
+.modal-urgent {
+  background: #fff8e1;
+  border: 1px solid #ffe082;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 24px;
+  text-align: left;
+}
+
+.modal-urgent-icon {
+  font-size: 16px;
+  margin-right: 4px;
+}
+
+.modal-urgent p {
+  color: #5d4037;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0 0 10px;
+}
+
+.modal-urgent strong {
+  color: #e65100;
+}
+
+.modal-numbers {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.modal-number {
+  background: #e65100;
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+  border-radius: 20px;
+  padding: 5px 18px;
+  letter-spacing: 0.03em;
+}
+
+.modal-ok-btn {
+  background: linear-gradient(135deg, #1a237e, #3949ab);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 13px 40px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  transition: opacity 0.2s;
+}
+
+.modal-ok-btn:hover {
+  opacity: 0.9;
+}
+
+/* ============================================================
+   ADD THESE STYLES to your existing appointments.css
+   ============================================================ */
+
+/* Optional tag next to step label */
+.optional-tag {
+  font-size: 11px;
+  font-weight: 400;
+  color: #888;
+  background: #f0f0f0;
+  border-radius: 10px;
+  padding: 2px 8px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* Reason textarea */
+.reason-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid #c7d9ff;
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #333;
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.reason-input:focus {
+  outline: none;
+  border-color: #0d3b66;
+}
+
+/* Detecting spinner row */
+.detecting-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: #888;
+  font-size: 13px;
+}
+
+/* 🚨 Emergency detected banner */
+.emergency-banner {
+  display: flex;
+  gap: 14px;
+  background: #fff5f5;
+  border: 1.5px solid #ffcccc;
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 12px;
+  animation: pulse-border 1.5s infinite;
+}
+
+@keyframes pulse-border {
+  0%, 100% { border-color: #ffcccc; }
+  50%       { border-color: #e53935; }
+}
+
+.emergency-icon {
+  font-size: 26px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.emergency-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.emergency-text strong {
+  color: #c62828;
+  font-size: 14px;
+}
+
+.emergency-text span {
+  color: #555;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.emergency-note {
+  color: #888 !important;
+  font-size: 12px !important;
+  margin-top: 4px;
+}
+
+/* ✅ Normal booking indicator */
+.normal-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: #2e7d32;
+  font-size: 13px;
+}
+
+.normal-dot {
+  color: #43a047;
+  font-size: 10px;
+}
+
+/* Emergency booking summary 
+.emergency-summary {
+  border: 1.5px solid #ffcccc !important;
+  background: #fff5f5 !important;
+}
+*/
+.priority-badge {
+  display: inline-block;
+  background: #e53935;
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+  border-radius: 20px;
+  padding: 4px 14px;
+  margin-bottom: 12px;
+  letter-spacing: 0.05em;
+}
+
+.emergency-priority {
+  color: #c62828 !important;
+  font-weight: bold !important;
+}
+
+/* Emergency confirm button */
+.emergency-btn {
+  background: linear-gradient(135deg, #e53935, #b71c1c) !important;
+  animation: pulse-btn 2s infinite;
+}
+
+.emergency-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #b71c1c, #e53935) !important;
+}
+
+@keyframes pulse-btn {
+  0%, 100% { box-shadow: 0 4px 15px rgba(229,57,53,0.4); }
+  50%       { box-shadow: 0 4px 25px rgba(229,57,53,0.7); }
+}
+
+/* Emergency how-step */
+.emergency-how-step .how-num.emergency-num {
+  background: #ffebee !important;
+  color: #c62828 !important;
+  font-size: 16px;
+}
+
+/* Emergency info card (sidebar) */
+.emergency-info-card {
+  background: #fff5f5;
+  border: 1px solid #ffcccc;
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+
+.emergency-info-card h4 {
+  color: #c62828;
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+
+.emergency-info-card ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #555;
+  font-size: 13px;
+  line-height: 1.9;
+}
+
+.emergency-info-card ul strong {
+  color: #c62828;
+}
+
+/* Small spinner (inline) */
+.spinner-sm {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 /* ─── Keyframes ───────────────────────────────────────────── */
 @keyframes floatBounce {
   0%, 100% { transform: translateY(0); }

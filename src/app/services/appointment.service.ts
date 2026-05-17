@@ -1,11 +1,9 @@
-// appointment.service.ts  — full updated file
-// Added: getAppointmentsByPatient(), cancelAppointment(), rescheduleAppointment()
+// src/services/appointment.service.ts — FULL UPDATED FILE
 
 import { map, shareReplay } from 'rxjs/operators';
 import { Injectable } from '@angular/core';
-import { HttpClient,HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
-
 
 export interface Doctor {
   id: number;
@@ -30,11 +28,25 @@ export interface TimeSlot {
 export interface Appointment {
   id?: number;
   doctorId: number;
-  patientName: string; // this is actually patientId / userId
+  patientName: string; // stores userId e.g. "PAT1765520117599942"
   appointmentDate: string;
   time: string;
-  priority: string;
+  priority: 'High' | 'Normal' | 'Medium';
   status?: string;
+  reason?: string;
+}
+
+export interface EmergencyDetectResult {
+  success: boolean;
+  isEmergency: boolean;
+  category: string;
+}
+
+export interface EmergencyBookResult {
+  success: boolean;
+  message: string;
+  appointment: Appointment & { doctorName: string };
+  bumped: { appointmentId: number; patientId: string } | null;
 }
 
 @Injectable({
@@ -42,99 +54,104 @@ export interface Appointment {
 })
 export class AppointmentService {
   private hospitalApi = 'https://20-13-9-186.nip.io/hospital';
-  private patientApi = 'https://20-13-9-186.nip.io/patient';
+  private patientApi  = 'https://20-13-9-186.nip.io/patient';
 
   constructor(private http: HttpClient) {}
 
   private doctors$: Observable<Doctor[]> | null = null;
 
-  // ── Existing methods (unchanged) ──────────────────────────
+  // ── Doctors ───────────────────────────────────────────────
 
-  
   getAllDoctors(): Observable<Doctor[]> {
     if (!this.doctors$) {
       this.doctors$ = this.http.get<any>(`${this.hospitalApi}/api/doctors`).pipe(
-        map((res) => {
-          // handle both: plain array OR { data: [] }
-          return Array.isArray(res) ? res : res.data ?? [];
-        }),
+        map((res) => (Array.isArray(res) ? res : res.data ?? [])),
         shareReplay(1)
       );
     }
     return this.doctors$;
   }
 
-  private handleError(err: any): string {
-    if (err?.error?.message) return err.error.message;
-    if (typeof err?.error === 'string') {
-      try {
-        return JSON.parse(err.error).message;
-      } catch {
-        return err.error;
-      }
-    }
-    return 'Failed to book appointment. Please try again.';
-  }
-
   getDoctorById(id: number): Observable<Doctor> {
     return this.http.get<Doctor>(`${this.hospitalApi}/api/doctors/${id}`);
   }
+
+  // ── Appointments ──────────────────────────────────────────
 
   getAppointmentsByDoctorAndDate(doctorId: number, date: string): Observable<Appointment[]> {
     return this.http.get<any>(
       `${this.hospitalApi}/api/appointments?doctorId=${doctorId}&date=${date}`
     ).pipe(
-      map((res) => Array.isArray(res) ? res : res.data ?? [])
+      map((res) => (Array.isArray(res) ? res : res.data ?? []))
     );
   }
 
-  sendReminder(payload: {
-  appointmentId: number;
-  patientId: string;
-  appointmentTime: string;
-  appointmentDate: string;
-  doctorName: string;
-}): Observable<any> {
-  const token = localStorage.getItem('token') ?? '';
-  const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
-  return this.http.post('https://20-13-9-186.nip.io/patient/api/reminders/send-reminder', payload, { headers });
-}
+  getAppointmentsByPatient(patientId: string): Observable<Appointment[]> {
+    return this.http.get<any>(
+      `${this.hospitalApi}/api/appointments?patientName=${patientId}`
+    ).pipe(
+      map((res) => (Array.isArray(res) ? res : res.data ?? res))
+    );
+  }
 
   bookAppointment(appointment: Appointment): Observable<Appointment> {
     return this.http.post<Appointment>(`${this.hospitalApi}/api/appointments`, appointment);
   }
 
-  // ── New methods for Dashboard ─────────────────────────────
-
-  /**
-   * Get all appointments for a specific patient.
-   * patientName field in the DB actually stores the userId (e.g. "PAT1765520117599942").
-   */
-  getAppointmentsByPatient(patientId: string): Observable<Appointment[]> {
-    return this.http.get<any>(`${this.hospitalApi}/api/appointments?patientName=${patientId}`).pipe(
-      // Handle both { data: [...] } and plain array responses
-      map((res) => (Array.isArray(res) ? res : res.data ?? res))
-    );
-  }
-
-  /**
-   * Cancel an appointment by ID.
-   * Sends a PATCH to update status to 'cancelled'.
-   */
   cancelAppointment(appointmentId: number): Observable<any> {
     return this.http.patch(`${this.hospitalApi}/api/appointments/${appointmentId}`, {
-      status: 'cancelled',
+      status: 'Cancelled',
     });
   }
 
-  /**
-   * Reschedule an appointment by ID.
-   * Sends a PUT with the updated appointment object.
-   */
   rescheduleAppointment(appointmentId: number, appointment: Appointment): Observable<Appointment> {
     return this.http.put<Appointment>(
       `${this.hospitalApi}/api/appointments/${appointmentId}`,
       appointment
+    );
+  }
+
+  // ── Reminders ─────────────────────────────────────────────
+
+  sendReminder(payload: {
+    appointmentId: number;
+    patientId: string;
+    appointmentTime: string;
+    appointmentDate: string;
+    doctorName: string;
+  }): Observable<any> {
+    const token = localStorage.getItem('token') ?? '';
+    const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
+    return this.http.post(`${this.patientApi}/api/reminders/send-reminder`, payload, { headers });
+  }
+
+  // ── EMERGENCY — NEW ───────────────────────────────────────
+
+  /**
+   * Send reason text to hospital backend for keyword-based emergency detection.
+   * Returns { isEmergency, category }
+   */
+  detectEmergency(reason: string): Observable<EmergencyDetectResult> {
+    return this.http.post<EmergencyDetectResult>(
+      `${this.hospitalApi}/api/emergency/detect`,
+      { reason }
+    );
+  }
+
+  /**
+   * Book an emergency appointment.
+   * Backend calculates next 15-min slot, bumps existing patient if needed,
+   * sends cancellation email to bumped patient, books with priority: 'High'.
+   */
+  bookEmergencyAppointment(payload: {
+    doctorId: number;
+    patientId: string;
+    reason: string;
+    category: string;
+  }): Observable<EmergencyBookResult> {
+    return this.http.post<EmergencyBookResult>(
+      `${this.hospitalApi}/api/emergency/book`,
+      payload
     );
   }
 }

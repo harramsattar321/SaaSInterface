@@ -3,23 +3,44 @@
   <div class="page-header">
     <a routerLink="/dashboard" class="dashboard-btn">&#8592; Back to Dashboard</a>
     <h1>Book an Appointment</h1>
-    <p class="subtitle">Select a doctor, choose a date, and pick an available time slot</p>
+    <p class="subtitle">Select a doctor, choose a date, and pick a time slot</p>
   </div>
 
-  <!-- Success Banner -->
+  <!-- ✅ Success Banner -->
   <div class="success-banner" *ngIf="bookingSuccess">
     <div class="success-icon">&#10003;</div>
     <div class="success-text">
       <strong>Appointment booked successfully!</strong>
+      <span *ngIf="bookedAppointmentTime">
+        Your slot has been assigned at <strong>{{ bookedAppointmentTime }}</strong>.
+      </span>
       <span>You will be notified once the doctor confirms your appointment.</span>
     </div>
     <button class="dismiss-btn" (click)="dismissSuccess()">&#10005;</button>
   </div>
 
-  <!-- Error Banner -->
-  <div class="error-banner" *ngIf="bookingError">
+  <!-- ❌ Error Banner -->
+  <div class="error-banner" *ngIf="bookingError && bookingError !== '__unavailable__'">
     <span>{{ bookingError }}</span>
     <button class="dismiss-btn" (click)="bookingError = ''">&#10005;</button>
+  </div>
+
+  <!-- 🏥 Doctor Unavailable Modal -->
+  <div class="modal-overlay" *ngIf="bookingError === '__unavailable__'" (click)="closeUnavailableModal()">
+    <div class="modal-box" (click)="$event.stopPropagation()">
+      <div class="modal-icon">🏥</div>
+      <h3 class="modal-title">Doctor Not Available</h3>
+      <p class="modal-reason">{{ doctorUnavailableMessage }}</p>
+      <div class="modal-urgent">
+        <span class="modal-urgent-icon"></span>
+        <p>
+          This is a medical emergency — please
+          <strong>visit your nearest hospital or emergency room immediately</strong>,
+          or call emergency services.
+        </p>
+      </div>
+      <button class="modal-ok-btn" (click)="closeUnavailableModal()">OK, I Understand</button>
+    </div>
   </div>
 
   <div class="booking-layout">
@@ -27,7 +48,7 @@
     <!-- LEFT: Form -->
     <div class="form-panel">
 
-      <!-- Step 1 -->
+      <!-- ── STEP 1: Select Doctor ────────────────────────── -->
       <div class="form-section">
         <div class="step-label">
           <span class="step-num">1</span>
@@ -67,10 +88,52 @@
         </div>
       </div>
 
-      <!-- Step 2 -->
+      <!-- ── STEP 2: Reason (optional) ───────────────────── -->
       <div class="form-section" *ngIf="selectedDoctor">
         <div class="step-label">
           <span class="step-num">2</span>
+          <span>Reason for Visit <span class="optional-tag">optional</span></span>
+        </div>
+
+        <textarea
+          class="reason-input"
+          [(ngModel)]="reason"
+          (input)="onReasonInput()"
+          placeholder="Describe your symptoms or reason for the visit (e.g. chest pain, accident, fever)..."
+          rows="3">
+        </textarea>
+
+        <!-- Detecting spinner -->
+        <div class="detecting-row" *ngIf="isDetecting">
+          <div class="spinner-sm"></div>
+          <span>Checking urgency...</span>
+        </div>
+
+        <!-- 🚨 Emergency detected banner -->
+        <div class="emergency-banner" *ngIf="isEmergency && !isDetecting">
+          <div class="emergency-icon"></div>
+          <div class="emergency-text">
+            <strong>Emergency Detected — {{ emergencyCategoryLabel }}</strong>
+            <span>
+              Your case has been flagged as urgent. Upon confirmation, you will be
+              assigned the <strong>next available slot</strong> (within 15–30 minutes)
+              and your appointment will be marked <strong>HIGH PRIORITY</strong> for the doctor.
+            </span>
+    
+          </div>
+        </div>
+
+        <!-- ✅ Normal indicator -->
+        <div class="normal-banner" *ngIf="reason.trim().length >= 3 && !isEmergency && !isDetecting">
+          <span class="normal-dot">&#9679;</span>
+          <span>No emergency detected — standard booking will proceed.</span>
+        </div>
+      </div>
+
+      <!-- ── STEP 3: Choose Date (only for normal flow) ───── -->
+      <div class="form-section" *ngIf="selectedDoctor && !isEmergency">
+        <div class="step-label">
+          <span class="step-num">3</span>
           <span>Choose a Date</span>
         </div>
         <input
@@ -86,10 +149,10 @@
         <p class="slot-error" *ngIf="slotError">{{ slotError }}</p>
       </div>
 
-      <!-- Step 3 -->
-      <div class="form-section" *ngIf="selectedDate && !slotError">
+      <!-- ── STEP 4: Pick Time Slot (only for normal flow) ── -->
+      <div class="form-section" *ngIf="selectedDate && !slotError && !isEmergency">
         <div class="step-label">
-          <span class="step-num">3</span>
+          <span class="step-num">4</span>
           <span>Pick a Time Slot</span>
         </div>
         <div class="loading-row" *ngIf="isLoadingSlots">
@@ -112,8 +175,43 @@
         </div>
       </div>
 
-      <!-- Step 4: Summary + Submit -->
-      <div class="form-section submit-section" *ngIf="selectedSlot">
+      <!-- ── Booking Summary + Confirm ───────────────────── -->
+
+      <!-- EMERGENCY summary -->
+      <div class="form-section submit-section" *ngIf="isEmergency">
+        <div class="booking-summary emergency-summary">
+          <div class="priority-badge"> HIGH PRIORITY</div>
+          <h4>Emergency Booking Summary</h4>
+          <div class="summary-row">
+            <span class="summary-label">Doctor</span>
+            <span class="summary-value">{{ selectedDoctor?.name }}</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Slot</span>
+            <span class="summary-value highlight">Next available (within 15–30 min)</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Priority</span>
+            <span class="summary-value emergency-priority">High</span>
+          </div>
+          <div class="summary-row" *ngIf="reason">
+            <span class="summary-label">Reason</span>
+            <span class="summary-value">{{ reason }}</span>
+          </div>
+        </div>
+        <button
+          class="book-btn emergency-btn"
+          (click)="submitAppointment()"
+          [disabled]="!isEmergencyFormValid || isSubmitting">
+          <span *ngIf="!isSubmitting">🚨 Confirm Emergency Appointment</span>
+          <span *ngIf="isSubmitting" class="btn-loading">
+            <span class="spinner-sm"></span> Booking...
+          </span>
+        </button>
+      </div>
+
+      <!-- NORMAL summary -->
+      <div class="form-section submit-section" *ngIf="selectedSlot && !isEmergency">
         <div class="booking-summary">
           <h4>Booking Summary</h4>
           <div class="summary-row">
@@ -132,11 +230,15 @@
             <span class="summary-label">Fee</span>
             <span class="summary-value">{{ selectedDoctor?.consultationFee }}</span>
           </div>
+          <div class="summary-row" *ngIf="reason">
+            <span class="summary-label">Reason</span>
+            <span class="summary-value">{{ reason }}</span>
+          </div>
         </div>
         <button
           class="book-btn"
           (click)="submitAppointment()"
-          [disabled]="!isFormValid || isSubmitting">
+          [disabled]="!isNormalFormValid || isSubmitting">
           <span *ngIf="!isSubmitting">Confirm Appointment</span>
           <span *ngIf="isSubmitting" class="btn-loading">
             <span class="spinner-sm"></span> Booking...
@@ -155,10 +257,10 @@
           <h4>How it works</h4>
         </div>
         <div class="how-card-body">
+
           <div class="how-step"
             [class.step-done]="selectedDoctor"
-            [class.step-active]="!selectedDoctor"
-            [class.step-pending]="false">
+            [class.step-active]="!selectedDoctor">
             <div class="how-num">
               <span *ngIf="!selectedDoctor">1</span>
               <span *ngIf="selectedDoctor">&#10003;</span>
@@ -168,46 +270,84 @@
               <p>Browse specialists and pick the one that fits your needs.</p>
             </div>
           </div>
-        
+
           <div class="how-step"
-            [class.step-done]="selectedDoctor && selectedDate"
-            [class.step-active]="selectedDoctor && !selectedDate"
+            [class.step-done]="selectedDoctor && reason.length > 0"
+            [class.step-active]="selectedDoctor && reason.length === 0"
             [class.step-pending]="!selectedDoctor">
             <div class="how-num">
-              <span *ngIf="!(selectedDoctor && selectedDate)">2</span>
-              <span *ngIf="selectedDoctor && selectedDate">&#10003;</span>
+              <span *ngIf="!(selectedDoctor && reason.length > 0)">2</span>
+              <span *ngIf="selectedDoctor && reason.length > 0">&#10003;</span>
             </div>
             <div>
-              <strong>Pick a date</strong>
-              <p>Only days when the doctor is available will show time slots.</p>
+              <strong>Describe your reason</strong>
+              <p>Optional — but helps us detect emergencies and assign priority.</p>
             </div>
           </div>
-        
-          <div class="how-step"
-            [class.step-done]="selectedDate && selectedSlot"
-            [class.step-active]="selectedDate && !selectedSlot && !slotError"
-            [class.step-pending]="!selectedDate">
-            <div class="how-num">
-              <span *ngIf="!(selectedDate && selectedSlot)">3</span>
-              <span *ngIf="selectedDate && selectedSlot">&#10003;</span>
-            </div>
+
+          <!-- Show emergency path -->
+          <div class="how-step emergency-how-step" *ngIf="isEmergency"
+            [class.step-active]="isEmergency">
+            <div class="how-num emergency-num">🚨</div>
             <div>
-              <strong>Select a slot</strong>
-              <p>Each slot is 15 min. Booked ones are hidden automatically.</p>
+              <strong>Emergency path</strong>
+              <p>Next available slot is auto-assigned. Existing patient is notified by email.</p>
             </div>
           </div>
-        
+
+          <!-- Normal path steps -->
+          <ng-container *ngIf="!isEmergency">
+            <div class="how-step"
+              [class.step-done]="selectedDoctor && selectedDate"
+              [class.step-active]="selectedDoctor && !selectedDate"
+              [class.step-pending]="!selectedDoctor">
+              <div class="how-num">
+                <span *ngIf="!(selectedDoctor && selectedDate)">3</span>
+                <span *ngIf="selectedDoctor && selectedDate">&#10003;</span>
+              </div>
+              <div>
+                <strong>Pick a date</strong>
+                <p>Only days when the doctor is available show slots.</p>
+              </div>
+            </div>
+
+            <div class="how-step"
+              [class.step-done]="selectedDate && selectedSlot"
+              [class.step-active]="selectedDate && !selectedSlot && !slotError"
+              [class.step-pending]="!selectedDate">
+              <div class="how-num">
+                <span *ngIf="!(selectedDate && selectedSlot)">4</span>
+                <span *ngIf="selectedDate && selectedSlot">&#10003;</span>
+              </div>
+              <div>
+                <strong>Select a slot</strong>
+                <p>Each slot is 15 min. Booked ones are hidden automatically.</p>
+              </div>
+            </div>
+          </ng-container>
+
           <div class="how-step"
-            [class.step-done]="false"
-            [class.step-active]="!!selectedSlot"
-            [class.step-pending]="!selectedSlot">
-            <div class="how-num">4</div>
+            [class.step-active]="isEmergency ? !!selectedDoctor : !!selectedSlot"
+            [class.step-pending]="isEmergency ? !selectedDoctor : !selectedSlot">
+            <div class="how-num">{{ isEmergency ? '4' : '5' }}</div>
             <div>
               <strong>Confirm</strong>
-              <p>Status stays pending until the doctor approves.</p>
+              <p>{{ isEmergency ? 'Doctor sees your case as HIGH PRIORITY.' : 'Status stays pending until the doctor approves.' }}</p>
             </div>
           </div>
+
         </div>
+      </div>
+
+      <!-- Emergency info card -->
+      <div class="emergency-info-card" *ngIf="isEmergency">
+        <h4> What happens next</h4>
+        <ul>
+          <li>You are assigned the <strong>next available 15-min slot</strong> from now.</li>
+          <li>If a patient already has that slot, their appointment is <strong>auto-cancelled</strong> and they receive an email.</li>
+          <li>Your appointment appears as <strong>HIGH PRIORITY</strong> on the doctor's dashboard.</li>
+          <li>You will receive a confirmation once it is processed.</li>
+        </ul>
       </div>
 
       <!-- Need Help CTA -->
