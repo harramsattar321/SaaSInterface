@@ -20,8 +20,8 @@ const MONGODB_URI = 'mongodb+srv://bscs22f01_db_user:7oOk403ph8AGdSDm@virtualpat
 const JWT_SECRET = 'your-secret-key-change-in-production-12345';
 
 // ✉️  YOUR HOSPITAL GMAIL — fill these in
-const EMAIL_USER = 'virtualpatientsupport@gmail.com';       // ← your Gmail address
-const EMAIL_PASS = 'hgll jbar sgnb vdml';           // ← 16-char App Password (spaces are fine)
+const EMAIL_USER = 'healthcare.virtualpatient@gmail.com';       // ← your Gmail address
+const EMAIL_PASS = 'jaky safl xtrx cqyf';           // ← 16-char App Password (spaces are fine)
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://ambitious-wave-0575e9603.7.azurestaticapps.net';     // ← change to your deployed URL in production
 
 // ============================================
