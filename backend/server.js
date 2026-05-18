@@ -22,7 +22,7 @@ const JWT_SECRET = 'your-secret-key-change-in-production-12345';
 // ✉️  YOUR HOSPITAL GMAIL — fill these in
 const EMAIL_USER = 'virtualpatientsupport@gmail.com';       // ← your Gmail address
 const EMAIL_PASS = 'hgll jbar sgnb vdml';           // ← 16-char App Password (spaces are fine)
-const FRONTEND_URL = 'http://localhost:4200';        // ← change to your deployed URL in production
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://ambitious-wave-0575e9603.7.azurestaticapps.net';     // ← change to your deployed URL in production
 
 // ============================================
 // NODEMAILER TRANSPORTER
