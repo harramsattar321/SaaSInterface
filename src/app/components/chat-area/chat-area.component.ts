@@ -20,7 +20,6 @@ interface Message {
   liked?: boolean;
   disliked?: boolean;
   copied?: boolean;
-  // Report analysis result attached to an AI message
   reportAnalysis?: ReportAnalysis;
 }
 
@@ -64,6 +63,7 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
 
   private recognition: any = null;
   private initialInputText: string = '';
+  isReportMode: boolean = false;
 
   constructor(
     private modelService: ModelService,
@@ -83,6 +83,7 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
       if (!chatId) {
         this.currentChatId = null;
         this.messages = [];
+        this.isReportMode = false;
         this.cdr.detectChanges();
         return;
       }
@@ -118,6 +119,7 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
 
   private openChat(chatId: string) {
     this.currentChatId = chatId;
+    this.isReportMode = false;
     this.isLoadingChat = true;
     this.cdr.detectChanges();
 
@@ -158,7 +160,7 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const maxSize = 10 * 1024 * 1024; // 10 MB
+    const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
       alert('File is too large. Maximum size is 10 MB.');
       return;
@@ -166,8 +168,6 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
 
     this.selectedFile = file;
     this.cdr.detectChanges();
-
-    // Reset input so the same file can be re-selected if needed
     input.value = '';
   }
 
@@ -187,7 +187,6 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
   sendMessage() {
     if (this.isRecording) this.stopRecording();
 
-    // If a file is selected, analyze it instead of sending a normal chat message
     if (this.selectedFile) {
       this.sendReportMessage(this.selectedFile);
       return;
@@ -227,7 +226,6 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
   // ─── Report Analysis ──────────────────────────────────────────────────────
 
   private sendReportMessage(file: File): void {
-    // 1. Show the user's file upload as a message
     const userMessage: Message = {
       id: this.messageIdCounter++,
       text: '',
@@ -240,45 +238,123 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
     this.isAnalyzingReport = true;
     this.cdr.detectChanges();
 
-    // 2. Call Flask
-    this.chatService.analyzeReport(file).subscribe({
-      next: (res) => {
-        this.isAnalyzingReport = false;
+    // Ensure we have a chat session to save into
+    const doAnalyze = (chatId: string) => {
+      this.chatService.analyzeReport(file).subscribe({
+        next: (res) => {
+          this.isAnalyzingReport = false;
+          this.isReportMode = true;
 
-        // 3. Attach the full analysis to an AI message
-        const aiMessage: Message = {
-          id: this.messageIdCounter++,
-          text: '',
-          isUser: false,
-          timestamp: new Date(),
-          reportAnalysis: res.analysis,
-        };
-        this.messages.push(aiMessage);
-        this.cdr.detectChanges();
-      },
-      error: (err) => {
-        this.isAnalyzingReport = false;
-        const errText =
-          err.status === 401
-            ? 'Session expired. Please log in again.'
-            : err.error?.error || 'Could not analyze the report. Please try again.';
+          const aiMessage: Message = {
+            id: this.messageIdCounter++,
+            text: '',
+            isUser: false,
+            timestamp: new Date(),
+            reportAnalysis: res.analysis,
+          };
+          this.messages.push(aiMessage);
+          this.cdr.detectChanges();
 
-        this.messages.push({
-          id: this.messageIdCounter++,
-          text: errText,
-          isUser: false,
-          timestamp: new Date(),
-        });
-        this.cdr.detectChanges();
-      },
-    });
+          // ── FIX 2: Save the report upload event and summary to DB ──────────
+          const summaryText = this._serializeAnalysis(res.analysis);
+          this.chatService.saveMessage(chatId, 'user', `[Report uploaded: ${file.name}]`).subscribe();
+          this.chatService.saveMessage(chatId, 'assistant', summaryText).subscribe();
+        },
+        error: (err) => {
+          this.isAnalyzingReport = false;
+          const errText =
+            err.status === 401
+              ? 'Session expired. Please log in again.'
+              : err.error?.error || 'Could not analyze the report. Please try again.';
+          this.messages.push({
+            id: this.messageIdCounter++,
+            text: errText,
+            isUser: false,
+            timestamp: new Date(),
+          });
+          this.cdr.detectChanges();
+        },
+      });
+    };
+
+    if (!this.currentChatId) {
+      this.chatService.createNewChat().subscribe({
+        next: (res) => {
+          this.currentChatId = res.chat.chatId;
+          doAnalyze(this.currentChatId!);
+        },
+        error: () => {
+          this.isAnalyzingReport = false;
+          this.cdr.detectChanges();
+        },
+      });
+    } else {
+      doAnalyze(this.currentChatId);
+    }
   }
 
-  // ─── Dispatch Chat Message ─────────────────────────────────────────────────
+  // Converts the structured ReportAnalysis object into a plain string for DB storage
+  private _serializeAnalysis(a: ReportAnalysis): string {
+    const lines: string[] = [`Report Type: ${a.report_type}`, '', `Summary: ${a.summary}`];
+
+    if (a.abnormal_values?.length) {
+      lines.push('', 'Abnormal Values:');
+      for (const v of a.abnormal_values) {
+        lines.push(`  • ${v.name}: ${v.value} (normal: ${v.normal_range}) [${v.status}]`);
+      }
+    }
+
+    if (a.key_observations?.length) {
+      lines.push('', 'Key Observations:');
+      for (const obs of a.key_observations) {
+        lines.push(`  • ${obs}`);
+      }
+    }
+
+    if (a.advice) lines.push('', `Advice: ${a.advice}`);
+    if (a.disclaimer) lines.push('', a.disclaimer);
+
+    return lines.join('\n');
+  }
+
+  // ─── Dispatch Message ──────────────────────────────────────────────────────
 
   private dispatchMessage(messageText: string) {
     const chatId = this.currentChatId!;
 
+    // ── Report Q&A mode ────────────────────────────────────────────────────
+    if (this.isReportMode) {
+      this.chatService.chatReport(messageText).subscribe({
+        next: (res) => {
+          this.isLoading = false;
+          const replyText = res.reply;
+          this.messages.push({
+            id: this.messageIdCounter++,
+            text: replyText,
+            isUser: false,
+            timestamp: new Date(),
+          });
+          this.cdr.detectChanges();
+
+          // ── FIX 2: Save report Q&A turns to DB ────────────────────────────
+          this.chatService.saveMessage(chatId, 'user', messageText).subscribe();
+          this.chatService.saveMessage(chatId, 'assistant', replyText).subscribe();
+        },
+        error: (err) => {
+          this.isLoading = false;
+          this.messages.push({
+            id: this.messageIdCounter++,
+            text: err.error?.error || 'Could not answer your question. Please try again.',
+            isUser: false,
+            timestamp: new Date(),
+          });
+          this.cdr.detectChanges();
+        },
+      });
+      return;
+    }
+
+    // ── Normal chat flow ───────────────────────────────────────────────────
     this.chatService.saveMessage(chatId, 'user', messageText).subscribe({
       next: () => {
         this.chatService.sendMessage(messageText).subscribe({
@@ -343,12 +419,40 @@ export class ChatAreaComponent implements OnInit, OnDestroy {
     this.editingText = message.text;
   }
 
+  // ── FIX 1: saveEdit now resends the edited message and regenerates the reply
   saveEdit() {
     const index = this.messages.findIndex((m) => m.id === this.editingMessageId);
-    if (index !== -1) {
-      this.messages[index].text = this.editingText.trim();
-    }
+    if (index === -1) { this.cancelEdit(); return; }
+
+    const newText = this.editingText.trim();
+    if (!newText) { this.cancelEdit(); return; }
+
+    // Update the edited message text
+    this.messages[index].text = newText;
+
+    // Remove all messages after the edited one (the old AI reply and anything after)
+    this.messages = this.messages.slice(0, index + 1);
+
     this.cancelEdit();
+
+    // Resend — reuse the full sendMessage flow
+    this.isLoading = true;
+    this.cdr.detectChanges();
+
+    if (!this.currentChatId) {
+      this.chatService.createNewChat().subscribe({
+        next: (res) => {
+          this.currentChatId = res.chat.chatId;
+          this.dispatchMessage(newText);
+        },
+        error: () => {
+          this.isLoading = false;
+          this.cdr.detectChanges();
+        },
+      });
+    } else {
+      this.dispatchMessage(newText);
+    }
   }
 
   cancelEdit() {
