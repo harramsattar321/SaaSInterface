@@ -45,6 +45,16 @@ export class ChatService {
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
+  
+  chatReport(message: string): Observable<{ reply: string }> {
+    return this.http.post<{ reply: string }>(
+      `${this.flaskUrl}/chat-report`,
+      { message, patientName: this.getPatientName() },
+      { headers: this.getHeaders() }
+    );
+  }
+
+
   private getHeaders(): HttpHeaders {
     const token = localStorage.getItem('token') ?? '';
     return new HttpHeaders({
