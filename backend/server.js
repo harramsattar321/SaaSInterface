@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
-const crypto = require('crypto'); // built-in Node module, no install needed
+const crypto = require('crypto');
 
 const app = express();
 
@@ -19,10 +19,9 @@ app.use(cors());
 const MONGODB_URI = 'mongodb+srv://bscs22f01_db_user:7oOk403ph8AGdSDm@virtualpatientsupport.75easkh.mongodb.net/patient_db?retryWrites=true&w=majority';
 const JWT_SECRET = 'your-secret-key-change-in-production-12345';
 
-// ✉️  YOUR HOSPITAL GMAIL — fill these in
-const EMAIL_USER = 'healthcare.virtualpatient@gmail.com';       // ← your Gmail address
-const EMAIL_PASS = 'jaky safl xtrx cqyf';           // ← 16-char App Password (spaces are fine)
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://ambitious-wave-0575e9603.7.azurestaticapps.net';     // ← change to your deployed URL in production
+const EMAIL_USER = 'healthcare.virtualpatient@gmail.com';
+const EMAIL_PASS = 'jaky safl xtrx cqyf';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://ambitious-wave-0575e9603.7.azurestaticapps.net';
 
 // ============================================
 // NODEMAILER TRANSPORTER
@@ -89,7 +88,6 @@ const patientSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  // Password reset fields
   resetPasswordToken: {
     type: String,
     default: null
@@ -106,7 +104,7 @@ const patientSchema = new mongoose.Schema({
 
 const Patient = mongoose.model('Patient', patientSchema);
 
-// --- Message Sub-Schema (embedded inside Chat) ---
+// --- Message Sub-Schema ---
 const messageSchema = new mongoose.Schema({
   role: {
     type: String,
@@ -153,145 +151,8 @@ chatSchema.pre('save', function () {
 const Chat = mongoose.model('Chat', chatSchema);
 
 // ============================================
-// HELPER: AI-Powered Chat Title Generator
+// HELPER FUNCTIONS
 // ============================================
-function generateChatTitle(firstUserMessage, existingTitles = []) {
-  if (!firstUserMessage || firstUserMessage.trim().length === 0) return 'New Chat';
-
-  let msg = firstUserMessage.trim();
-
-  // ── Greetings → skip to default ───────────────────────────────────────────
-  if (/^(hi|hello|hey|howdy|good\s*(morning|afternoon|evening)|what'?s up|yo|sup)\b/i.test(msg)) {
-    return uniqueTitle('General Conversation', existingTitles);
-  }
-
-  // ── Thanks / follow-up ────────────────────────────────────────────────────
-  if (/^(thanks|thank you|thx|ty|cheers|appreciate)/i.test(msg)) {
-    return uniqueTitle('Follow-up Message', existingTitles);
-  }
-
-  // ── RESCHEDULE ────────────────────────────────────────────────────────────
-  if (/reschedul/i.test(msg)) {
-    if (/appointment/i.test(msg)) return uniqueTitle('Rescheduling an Appointment', existingTitles);
-    if (/doctor|dr\.?/i.test(msg)) return uniqueTitle('Rescheduling Doctor Visit', existingTitles);
-    return uniqueTitle('Rescheduling Request', existingTitles);
-  }
-
-  // ── CANCEL ────────────────────────────────────────────────────────────────
-  if (/cancel/i.test(msg)) {
-    if (/appointment/i.test(msg)) return uniqueTitle('Cancelling an Appointment', existingTitles);
-    return uniqueTitle('Cancellation Request', existingTitles);
-  }
-
-  // ── BOOK / SCHEDULE ───────────────────────────────────────────────────────
-  if (/\b(book|schedule|make)\b.*(appointment|visit|slot|consultation)/i.test(msg)) {
-    return uniqueTitle('Booking an Appointment', existingTitles);
-  }
-
-  // ── DOCTOR AVAILABILITY ───────────────────────────────────────────────────
-  if (/\b(available|availability|free|open)\b.*\b(doctor|dr\.?|specialist)/i.test(msg) ||
-    /\b(doctor|dr\.?|specialist)\b.*\b(available|availability|free|open)/i.test(msg) ||
-    /what doctors are available/i.test(msg)) {
-    const dayMatch = msg.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|this week|next week|weekend)\b/i);
-    if (dayMatch) return uniqueTitle(`Doctor Availability — ${toTitleCase(dayMatch[1])}`, existingTitles);
-    return uniqueTitle('Doctor Availability', existingTitles);
-  }
-
-  // ── APPOINTMENT STATUS ────────────────────────────────────────────────────
-  if (/\b(appointment|visit)\b/i.test(msg)) {
-    if (/confirm|confirmation/i.test(msg)) return uniqueTitle('Appointment Confirmation', existingTitles);
-    if (/status|update/i.test(msg)) return uniqueTitle('Appointment Status Update', existingTitles);
-    if (/remind|reminder/i.test(msg)) return uniqueTitle('Appointment Reminder', existingTitles);
-    if (/upcoming|next|future/i.test(msg)) return uniqueTitle('Upcoming Appointment', existingTitles);
-    return uniqueTitle('Appointment Enquiry', existingTitles);
-  }
-
-  // ── INSURANCE ─────────────────────────────────────────────────────────────
-  if (/insurance/i.test(msg)) {
-    if (/accept|support|partner|cover|network/i.test(msg)) return uniqueTitle('Accepted Insurance Providers', existingTitles);
-    if (/claim/i.test(msg)) return uniqueTitle('Insurance Claim Help', existingTitles);
-    if (/cost|price|fee|pay/i.test(msg)) return uniqueTitle('Insurance Coverage & Costs', existingTitles);
-    return uniqueTitle('Insurance Enquiry', existingTitles);
-  }
-
-  // ── SYMPTOMS ──────────────────────────────────────────────────────────────
-  const symptomMatch = msg.match(
-    /\b(pain|ache|fever|cough|cold|nausea|vomiting|headache|migraine|dizziness|fatigue|weakness|swelling|bleeding|rash|itching|burning|numbness|chest tightness|shortness of breath|sore throat|back pain|stomach ache|anxiety|depression)\b/i
-  );
-  if (symptomMatch) {
-    return uniqueTitle(`${toTitleCase(symptomMatch[1])} — Symptom Help`, existingTitles);
-  }
-
-  // ── MEDICATION / PRESCRIPTION ─────────────────────────────────────────────
-  if (/\b(medication|medicine|drug|prescription|dose|dosage|side effect|tablet|pill|inject)\b/i.test(msg)) {
-    if (/side effect/i.test(msg)) return uniqueTitle('Medication Side Effects', existingTitles);
-    if (/dose|dosage/i.test(msg)) return uniqueTitle('Medication Dosage Query', existingTitles);
-    return uniqueTitle('Medication Enquiry', existingTitles);
-  }
-
-  // ── LAB / TEST / REPORT ───────────────────────────────────────────────────
-  if (/\b(lab|test|report|result|blood|urine|x.?ray|scan|mri|ultrasound|ecg|ekg)\b/i.test(msg)) {
-    if (/result|report/i.test(msg)) return uniqueTitle('Lab Results & Reports', existingTitles);
-    return uniqueTitle('Medical Test Enquiry', existingTitles);
-  }
-
-  // ── BILLING / PAYMENT ─────────────────────────────────────────────────────
-  if (/\b(bill|billing|payment|pay|fee|cost|price|charge|invoice|receipt)\b/i.test(msg)) {
-    return uniqueTitle('Billing & Payment Query', existingTitles);
-  }
-
-  // ── EMERGENCY ─────────────────────────────────────────────────────────────
-  if (/\b(emergency|urgent|immediately|right now|critical|serious)\b/i.test(msg)) {
-    return uniqueTitle('Urgent Medical Query', existingTitles);
-  }
-
-  // ── HOW DO I / HOW TO ─────────────────────────────────────────────────────
-  const howMatch = msg.match(/^how\s+(?:do\s+i|to|can\s+i|should\s+i)\s+(.+?)(?:\?|$)/i);
-  if (howMatch) {
-    const topic = howMatch[1].trim().replace(/[?.!]+$/, '');
-    return uniqueTitle(toTitleCase(topic), existingTitles);
-  }
-
-  // ── WHAT IS / WHAT ARE ────────────────────────────────────────────────────
-  const whatMatch = msg.match(/^what\s+(?:is|are|was|were)\s+(?:a\s+|an\s+|the\s+)?(.+?)(?:\?|$)/i);
-  if (whatMatch) {
-    const topic = whatMatch[1].trim().replace(/[?.!]+$/, '');
-    return uniqueTitle(toTitleCase(topic), existingTitles);
-  }
-
-  // ── CAN I / SHOULD I ─────────────────────────────────────────────────────
-  const canMatch = msg.match(/^(?:can|should|could|would)\s+(?:i|you|we)\s+(.+?)(?:\?|$)/i);
-  if (canMatch) {
-    const topic = canMatch[1].trim().replace(/[?.!]+$/, '');
-    return uniqueTitle(toTitleCase(topic), existingTitles);
-  }
-
-  // ── FALLBACK — truncate the message cleanly ───────────────────────────────
-  let title = msg.replace(/[*_`#>\-]+/g, '').trim();
-  title = title.replace(/[.!?]+$/, '').trim();
-  title = toTitleCase(title);
-  if (title.length > 50) {
-    title = title.substring(0, 50).replace(/\s+\S*$/, '') + '...';
-  }
-
-  return uniqueTitle(title || 'New Chat', existingTitles);
-}
-
-// ── Appends date suffix if title already exists ──────────────────────────────
-function uniqueTitle(title, existingTitles) {
-  if (!existingTitles.includes(title)) return title;
-
-  // Try appending today's date
-  const today = new Date();
-  const dateStr = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const withDate = `${title} · ${dateStr}`;
-  if (!existingTitles.includes(withDate)) return withDate;
-
-  // If date version also exists, append a counter
-  let counter = 2;
-  while (existingTitles.includes(`${title} · ${dateStr} (${counter})`)) counter++;
-  return `${title} · ${dateStr} (${counter})`;
-}
 
 function toTitleCase(str) {
   const lowers = new Set(['a', 'an', 'the', 'and', 'but', 'or', 'for', 'nor', 'on', 'at', 'to', 'by', 'in', 'of', 'up', 'as', 'is', 'it']);
@@ -306,25 +167,122 @@ function toTitleCase(str) {
     .join(' ');
 }
 
-function fallbackTitle(msg) {
-  // Clean and truncate — only used if Flask is down
-  let title = msg.trim().replace(/[*_`#>\-]+/g, '').trim();
+function uniqueTitle(title, existingTitles) {
+  if (!existingTitles.includes(title)) return title;
+
+  const today = new Date();
+  const dateStr = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const withDate = `${title} · ${dateStr}`;
+  if (!existingTitles.includes(withDate)) return withDate;
+
+  let counter = 2;
+  while (existingTitles.includes(`${title} · ${dateStr} (${counter})`)) counter++;
+  return `${title} · ${dateStr} (${counter})`;
+}
+
+function generateChatTitle(firstUserMessage, existingTitles = []) {
+  if (!firstUserMessage || firstUserMessage.trim().length === 0) return 'New Chat';
+
+  let msg = firstUserMessage.trim();
+
+  if (/^(hi|hello|hey|howdy|good\s*(morning|afternoon|evening)|what'?s up|yo|sup)\b/i.test(msg)) {
+    return uniqueTitle('General Conversation', existingTitles);
+  }
+
+  if (/^(thanks|thank you|thx|ty|cheers|appreciate)/i.test(msg)) {
+    return uniqueTitle('Follow-up Message', existingTitles);
+  }
+
+  if (/reschedul/i.test(msg)) {
+    if (/appointment/i.test(msg)) return uniqueTitle('Rescheduling an Appointment', existingTitles);
+    if (/doctor|dr\.?/i.test(msg)) return uniqueTitle('Rescheduling Doctor Visit', existingTitles);
+    return uniqueTitle('Rescheduling Request', existingTitles);
+  }
+
+  if (/cancel/i.test(msg)) {
+    if (/appointment/i.test(msg)) return uniqueTitle('Cancelling an Appointment', existingTitles);
+    return uniqueTitle('Cancellation Request', existingTitles);
+  }
+
+  if (/\b(book|schedule|make)\b.*(appointment|visit|slot|consultation)/i.test(msg)) {
+    return uniqueTitle('Booking an Appointment', existingTitles);
+  }
+
+  if (/\b(available|availability|free|open)\b.*\b(doctor|dr\.?|specialist)/i.test(msg) ||
+    /\b(doctor|dr\.?|specialist)\b.*\b(available|availability|free|open)/i.test(msg) ||
+    /what doctors are available/i.test(msg)) {
+    const dayMatch = msg.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|this week|next week|weekend)\b/i);
+    if (dayMatch) return uniqueTitle(`Doctor Availability — ${toTitleCase(dayMatch[1])}`, existingTitles);
+    return uniqueTitle('Doctor Availability', existingTitles);
+  }
+
+  if (/\b(appointment|visit)\b/i.test(msg)) {
+    if (/confirm|confirmation/i.test(msg)) return uniqueTitle('Appointment Confirmation', existingTitles);
+    if (/status|update/i.test(msg)) return uniqueTitle('Appointment Status Update', existingTitles);
+    if (/remind|reminder/i.test(msg)) return uniqueTitle('Appointment Reminder', existingTitles);
+    if (/upcoming|next|future/i.test(msg)) return uniqueTitle('Upcoming Appointment', existingTitles);
+    return uniqueTitle('Appointment Enquiry', existingTitles);
+  }
+
+  if (/insurance/i.test(msg)) {
+    if (/accept|support|partner|cover|network/i.test(msg)) return uniqueTitle('Accepted Insurance Providers', existingTitles);
+    if (/claim/i.test(msg)) return uniqueTitle('Insurance Claim Help', existingTitles);
+    if (/cost|price|fee|pay/i.test(msg)) return uniqueTitle('Insurance Coverage & Costs', existingTitles);
+    return uniqueTitle('Insurance Enquiry', existingTitles);
+  }
+
+  const symptomMatch = msg.match(
+    /\b(pain|ache|fever|cough|cold|nausea|vomiting|headache|migraine|dizziness|fatigue|weakness|swelling|bleeding|rash|itching|burning|numbness|chest tightness|shortness of breath|sore throat|back pain|stomach ache|anxiety|depression)\b/i
+  );
+  if (symptomMatch) {
+    return uniqueTitle(`${toTitleCase(symptomMatch[1])} — Symptom Help`, existingTitles);
+  }
+
+  if (/\b(medication|medicine|drug|prescription|dose|dosage|side effect|tablet|pill|inject)\b/i.test(msg)) {
+    if (/side effect/i.test(msg)) return uniqueTitle('Medication Side Effects', existingTitles);
+    if (/dose|dosage/i.test(msg)) return uniqueTitle('Medication Dosage Query', existingTitles);
+    return uniqueTitle('Medication Enquiry', existingTitles);
+  }
+
+  if (/\b(lab|test|report|result|blood|urine|x.?ray|scan|mri|ultrasound|ecg|ekg)\b/i.test(msg)) {
+    if (/result|report/i.test(msg)) return uniqueTitle('Lab Results & Reports', existingTitles);
+    return uniqueTitle('Medical Test Enquiry', existingTitles);
+  }
+
+  if (/\b(bill|billing|payment|pay|fee|cost|price|charge|invoice|receipt)\b/i.test(msg)) {
+    return uniqueTitle('Billing & Payment Query', existingTitles);
+  }
+
+  if (/\b(emergency|urgent|immediately|right now|critical|serious)\b/i.test(msg)) {
+    return uniqueTitle('Urgent Medical Query', existingTitles);
+  }
+
+  const howMatch = msg.match(/^how\s+(?:do\s+i|to|can\s+i|should\s+i)\s+(.+?)(?:\?|$)/i);
+  if (howMatch) {
+    const topic = howMatch[1].trim().replace(/[?.!]+$/, '');
+    return uniqueTitle(toTitleCase(topic), existingTitles);
+  }
+
+  const whatMatch = msg.match(/^what\s+(?:is|are|was|were)\s+(?:a\s+|an\s+|the\s+)?(.+?)(?:\?|$)/i);
+  if (whatMatch) {
+    const topic = whatMatch[1].trim().replace(/[?.!]+$/, '');
+    return uniqueTitle(toTitleCase(topic), existingTitles);
+  }
+
+  const canMatch = msg.match(/^(?:can|should|could|would)\s+(?:i|you|we)\s+(.+?)(?:\?|$)/i);
+  if (canMatch) {
+    const topic = canMatch[1].trim().replace(/[?.!]+$/, '');
+    return uniqueTitle(toTitleCase(topic), existingTitles);
+  }
+
+  let title = msg.replace(/[*_`#>\-]+/g, '').trim();
   title = title.replace(/[.!?]+$/, '').trim();
+  title = toTitleCase(title);
   if (title.length > 50) {
     title = title.substring(0, 50).replace(/\s+\S*$/, '') + '...';
   }
-  return title || 'New Chat';
-}
 
-function toTitleCase(str) {
-  const lowers = new Set(['a', 'an', 'the', 'and', 'but', 'or', 'for', 'nor', 'on', 'at', 'to', 'by', 'in', 'of', 'up', 'as', 'is', 'it']);
-  return str
-    .toLowerCase()
-    .replace(/[?.!]+$/, '')
-    .trim()
-    .split(/\s+/)
-    .map((word, i) => (i === 0 || !lowers.has(word)) ? word.charAt(0).toUpperCase() + word.slice(1) : word)
-    .join(' ');
+  return uniqueTitle(title || 'New Chat', existingTitles);
 }
 
 // ============================================
@@ -458,7 +416,6 @@ app.post('/api/auth/login', async (req, res) => {
 // FORGOT PASSWORD
 // ============================================
 
-// STEP 1 — Request reset link
 app.post('/api/auth/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
@@ -469,7 +426,6 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 
     const patient = await Patient.findOne({ email: email.toLowerCase().trim() });
 
-    // Always respond with success — never reveal if the email exists (security)
     const genericResponse = {
       success: true,
       message: 'If an account with that email exists, a reset link has been sent.'
@@ -480,9 +436,8 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       return res.status(200).json(genericResponse);
     }
 
-    // Generate a secure random token valid for 1 hour
     const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
+    const resetExpires = new Date(Date.now() + 60 * 60 * 1000);
 
     patient.resetPasswordToken = resetToken;
     patient.resetPasswordExpires = resetExpires;
@@ -490,7 +445,6 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 
     const resetLink = `${FRONTEND_URL}/reset-password?token=${resetToken}`;
 
-    // Send the email
     await transporter.sendMail({
       from: `"Virtual Patient Support" <${EMAIL_USER}>`,
       to: patient.email,
@@ -520,7 +474,6 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   }
 });
 
-// STEP 2 — Reset password using the token
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
     const { token, newPassword } = req.body;
@@ -533,10 +486,9 @@ app.post('/api/auth/reset-password', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
     }
 
-    // Find patient with a valid, non-expired token
     const patient = await Patient.findOne({
       resetPasswordToken: token,
-      resetPasswordExpires: { $gt: new Date() } // token must not be expired
+      resetPasswordExpires: { $gt: new Date() }
     });
 
     if (!patient) {
@@ -546,7 +498,6 @@ app.post('/api/auth/reset-password', async (req, res) => {
       });
     }
 
-    // Hash new password and clear the reset token
     patient.password = await bcrypt.hash(newPassword, 8);
     patient.resetPasswordToken = null;
     patient.resetPasswordExpires = null;
@@ -613,7 +564,7 @@ app.put('/api/user/update', authenticateToken, async (req, res) => {
 });
 
 // ============================================
-// ROUTES — CHATS  (all protected)
+// ROUTES — CHATS (all protected)
 // ============================================
 
 app.post('/api/chats/new', authenticateToken, async (req, res) => {
@@ -660,9 +611,7 @@ app.post('/api/chats/:chatId/message', authenticateToken, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Chat not found or access denied' });
     }
 
-    // Generate title from first user message
     if (role === 'user' && chat.title === 'New Chat' && chat.messages.length === 0) {
-      // Fetch this patient's existing titles to avoid duplicates
       const existingChats = await Chat.find({
         patientId: req.user.userId,
         _id: { $ne: chatId },
@@ -670,10 +619,8 @@ app.post('/api/chats/:chatId/message', authenticateToken, async (req, res) => {
       }).select('title').lean();
 
       const existingTitles = existingChats.map(c => c.title);
-
-      // Generate AI title (async — await it)
       chat.title = await generateChatTitle(content, existingTitles);
-      console.log(`✏️  AI title set: "${chat.title}"`);
+      console.log(`✏️  Chat title set: "${chat.title}"`);
     }
 
     chat.messages.push({ role, content });
@@ -795,6 +742,7 @@ app.delete('/api/chats/:chatId', authenticateToken, async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error deleting chat' });
   }
 });
+
 // ============================================
 // ROUTE — APPOINTMENT REMINDER EMAIL
 // ============================================
@@ -803,7 +751,6 @@ app.post('/api/reminders/send-reminder', authenticateToken, async (req, res) => 
   try {
     const { appointmentId, patientId, appointmentTime, appointmentDate, doctorName } = req.body;
 
-    // Fetch patient email from our own DB
     const patient = await Patient.findOne({ userId: patientId })
       .select('firstName lastName email')
       .lean()
@@ -821,28 +768,19 @@ app.post('/api/reminders/send-reminder', authenticateToken, async (req, res) => 
       subject: `Your Appointment is in 2 Hours — Virtual Hospital (#${appointmentId})`,
       html: `
     <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto; border: 1px solid #c7d9ff; border-radius: 14px; overflow: hidden;">
-
-      <!-- Header Banner -->
       <div style="background: #0d3b66; padding: 22px 28px;">
         <h2 style="color: #ffffff; margin: 0 0 4px; font-size: 18px;">Virtual Hospital</h2>
         <p style="color: rgba(255,255,255,0.7); margin: 0; font-size: 12px;">Your health is our priority</p>
       </div>
-
-      <!-- Body -->
       <div style="padding: 26px 28px; background: #ffffff;">
-
-        <!-- Title + Urgency Badge -->
         <h3 style="color: #0d3b66; margin: 0 0 8px;">Appointment Reminder</h3>
         <span style="display: inline-block; background: #fff3e0; color: #e65100; font-size: 11px; font-weight: bold; border-radius: 20px; padding: 3px 12px; margin-bottom: 18px;">
           &#9679; In 2 Hours
         </span>
-
         <p style="color: #333; margin: 0 0 10px;">Dear <strong>${fullName}</strong>,</p>
         <p style="color: #555; line-height: 1.7; margin: 0 0 20px; font-size: 14px;">
-          We hope you're doing well! This is a friendly reminder from <strong>Virtual Hospital</strong> that your upcoming appointment is just <strong>2 hours away</strong>. Our team is all set to welcome you and is committed to providing you with the best care possible.
+          We hope you're doing well! This is a friendly reminder from <strong>Virtual Hospital</strong> that your upcoming appointment is just <strong>2 hours away</strong>.
         </p>
-
-        <!-- Appointment Details Table -->
         <div style="background: #f7faff; border: 1px solid #c7d9ff; border-radius: 10px; overflow: hidden; margin-bottom: 20px;">
           <div style="background: #e8f0fe; padding: 8px 16px; border-bottom: 1px solid #c7d9ff;">
             <p style="font-size: 11px; font-weight: bold; color: #0d3b66; margin: 0; text-transform: uppercase; letter-spacing: 0.05em;">Appointment Details</p>
@@ -866,40 +804,32 @@ app.post('/api/reminders/send-reminder', authenticateToken, async (req, res) => 
             </tr>
           </table>
         </div>
-
-        <!-- Tip Cards -->
-<table style="width: 100%; border-collapse: collapse; margin-bottom: 22px;">
-  <tr>
-    <td style="width: 50%; padding-right: 8px;">
-      <div style="background: #e8f5e9; border-radius: 8px; padding: 10px 14px;">
-        <p style="font-size: 12px; font-weight: bold; color: #2e7d32; margin: 0 0 3px;">Arrive Early</p>
-        <p style="font-size: 12px; color: #388e3c; margin: 0;">Please be there <strong>10 minutes</strong> before your slot.</p>
-      </div>
-    </td>
-    <td style="width: 50%; padding-left: 8px;">
-      <div style="background: #fff8e1; border-radius: 8px; padding: 10px 14px;">
-        <p style="font-size: 12px; font-weight: bold; color: #f57f17; margin: 0 0 3px;">Bring Your Reports</p>
-        <p style="font-size: 12px; color: #f9a825; margin: 0;">Carry any previous test results or prescriptions.</p>
-      </div>
-    </td>
-  </tr>
-</table>
-
-        <!-- Regards -->
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 22px;">
+          <tr>
+            <td style="width: 50%; padding-right: 8px;">
+              <div style="background: #e8f5e9; border-radius: 8px; padding: 10px 14px;">
+                <p style="font-size: 12px; font-weight: bold; color: #2e7d32; margin: 0 0 3px;">Arrive Early</p>
+                <p style="font-size: 12px; color: #388e3c; margin: 0;">Please be there <strong>10 minutes</strong> before your slot.</p>
+              </div>
+            </td>
+            <td style="width: 50%; padding-left: 8px;">
+              <div style="background: #fff8e1; border-radius: 8px; padding: 10px 14px;">
+                <p style="font-size: 12px; font-weight: bold; color: #f57f17; margin: 0 0 3px;">Bring Your Reports</p>
+                <p style="font-size: 12px; color: #f9a825; margin: 0;">Carry any previous test results or prescriptions.</p>
+              </div>
+            </td>
+          </tr>
+        </table>
         <hr style="border: none; border-top: 1px solid #eee; margin-bottom: 18px;">
-        <p style="color: #444; font-size: 14px; line-height: 1.7; margin: 0 0 10px;">
-          We look forward to seeing you and supporting your health journey. If you have any questions or concerns before your visit, please don't hesitate to reach out — we're always here to help.
-        </p>
         <p style="color: #444; font-size: 14px; margin: 0 0 4px;">Warm regards,</p>
         <p style="color: #0d3b66; font-weight: bold; font-size: 14px; margin: 0;">The Virtual Hospital Care Team</p>
         <p style="color: #aaa; font-size: 12px; margin: 4px 0 0;">Virtual Patient Support System &bull; Caring for you, every step of the way.</p>
-
       </div>
     </div>
   `
     });
-    console.log(`✉️  2-hour reminder sent to: ${patient.email} for appointment #${appointmentId}`);
 
+    console.log(`✉️  2-hour reminder sent to: ${patient.email} for appointment #${appointmentId}`);
     res.status(200).json({ success: true, message: 'Reminder email sent successfully' });
 
   } catch (error) {
@@ -907,22 +837,15 @@ app.post('/api/reminders/send-reminder', authenticateToken, async (req, res) => 
     res.status(500).json({ success: false, message: 'Failed to send reminder email' });
   }
 });
-// ============================================================
-// ADD THIS BLOCK to your backend/server.js (port 8000)
-// Place it just before the "START SERVER" section
-// ============================================================
 
-// ============================================================
+// ============================================
 // ROUTE — EMERGENCY CANCELLATION EMAIL
-// Called internally by hospital backend (port 3000)
-// when an existing patient is bumped by an emergency case
-// ============================================================
+// ============================================
 
 app.post('/api/notifications/cancellation-email', async (req, res) => {
   try {
     const { patientId, doctorName, appointmentDate, appointmentTime, appointmentId, reason } = req.body;
 
-    // Fetch patient from our DB using patientId (stored as userId)
     const patient = await Patient.findOne({ userId: patientId })
       .select('firstName lastName email')
       .lean()
@@ -941,30 +864,21 @@ app.post('/api/notifications/cancellation-email', async (req, res) => {
       subject: `Important: Your Appointment Has Been Rescheduled — Virtual Hospital (#${appointmentId})`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto; border: 1px solid #ffcccc; border-radius: 14px; overflow: hidden;">
-
-          <!-- Header -->
           <div style="background: #c62828; padding: 22px 28px;">
             <h2 style="color: #ffffff; margin: 0 0 4px; font-size: 18px;">Virtual Hospital</h2>
             <p style="color: rgba(255,255,255,0.75); margin: 0; font-size: 12px;">Appointment Update Notice</p>
           </div>
-
-          <!-- Body -->
           <div style="padding: 26px 28px; background: #ffffff;">
-
             <h3 style="color: #c62828; margin: 0 0 6px;">Your Appointment Has Been Cancelled</h3>
             <span style="display: inline-block; background: #fff3e0; color: #e65100; font-size: 11px; font-weight: bold; border-radius: 20px; padding: 3px 12px; margin-bottom: 18px;">
               &#9888; Action Required
             </span>
-
             <p style="color: #333; margin: 0 0 10px;">Dear <strong>${fullName}</strong>,</p>
-
             <p style="color: #555; line-height: 1.7; margin: 0 0 16px; font-size: 14px;">
               We sincerely apologise for the inconvenience. Your appointment has been
               <strong>automatically cancelled</strong> due to an emergency medical case that
               required urgent attention during your scheduled time slot.
             </p>
-
-            <!-- Cancelled Appointment Details -->
             <div style="background: #fff5f5; border: 1px solid #ffcccc; border-radius: 10px; overflow: hidden; margin-bottom: 20px;">
               <div style="background: #ffebee; padding: 8px 16px; border-bottom: 1px solid #ffcccc;">
                 <p style="font-size: 11px; font-weight: bold; color: #c62828; margin: 0; text-transform: uppercase; letter-spacing: 0.05em;">Cancelled Appointment</p>
@@ -988,8 +902,6 @@ app.post('/api/notifications/cancellation-email', async (req, res) => {
                 </tr>
               </table>
             </div>
-
-            <!-- What to do next -->
             <div style="background: #e8f5e9; border-radius: 10px; padding: 16px 18px; margin-bottom: 20px;">
               <p style="font-size: 13px; font-weight: bold; color: #2e7d32; margin: 0 0 8px;">&#10003; What to do next</p>
               <ul style="color: #388e3c; font-size: 13px; margin: 0; padding-left: 18px; line-height: 1.8;">
@@ -998,19 +910,10 @@ app.post('/api/notifications/cancellation-email', async (req, res) => {
                 <li>If this is urgent, please call our helpline or visit us directly.</li>
               </ul>
             </div>
-
             <hr style="border: none; border-top: 1px solid #eee; margin-bottom: 18px;">
-
-            <p style="color: #444; font-size: 14px; line-height: 1.7; margin: 0 0 10px;">
-              We truly value your time and trust in our hospital. We understand this is an
-              inconvenience and we deeply apologise. Our team is available to help you
-              reschedule at your earliest convenience.
-            </p>
-
             <p style="color: #444; font-size: 14px; margin: 0 0 4px;">Warm regards,</p>
             <p style="color: #0d3b66; font-weight: bold; font-size: 14px; margin: 0;">The Virtual Hospital Care Team</p>
             <p style="color: #aaa; font-size: 12px; margin: 4px 0 0;">Virtual Patient Support System &bull; Caring for you, every step of the way.</p>
-
           </div>
         </div>
       `,
@@ -1024,6 +927,7 @@ app.post('/api/notifications/cancellation-email', async (req, res) => {
     return res.status(500).json({ success: false, message: 'Failed to send cancellation email' });
   }
 });
+
 // ============================================
 // START SERVER
 // ============================================
@@ -1044,6 +948,9 @@ app.listen(PORT, () => {
   console.log(`   GET   /api/chats`);
   console.log(`   GET   /api/chats/:chatId`);
   console.log(`   PUT   /api/chats/:chatId/rename`);
-  console.log(`   DELETE /api/chats/:chatId`); console.log(`\n   REMINDER ROUTES (protected):`);
+  console.log(`   DELETE /api/chats/:chatId`);
+  console.log(`\n   REMINDER ROUTES (protected):`);
   console.log(`   POST  /api/reminders/send-reminder`);
+  console.log(`\n   NOTIFICATION ROUTES:`);
+  console.log(`   POST  /api/notifications/cancellation-email`);
 });
