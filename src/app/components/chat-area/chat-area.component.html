@@ -239,7 +239,7 @@
         <div *ngIf="isEditing && editingMessageId === message.id" class="edit-mode">
           <textarea [(ngModel)]="editingText" (keydown)="onEditKeyPress($event)"></textarea>
           <div class="edit-actions">
-            <button class="save-btn" (click)="saveEdit()">Save</button>
+            <button class="save-btn" (click)="saveEdit()">Send</button>
             <button class="cancel-btn" (click)="cancelEdit()">Cancel</button>
           </div>
         </div>
