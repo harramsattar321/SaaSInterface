@@ -25,10 +25,8 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
 
   availableSlots: string[] = [];
   bookedSlots: string[] = [];
-
-  // ✅ ADDED
   allGeneratedSlots: string[] = [];
-
+  
   minDate: string = '';
   availableDaysForDoctor: number[] = [];
 
@@ -119,11 +117,7 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
       this.selectedDate = '';
       this.selectedSlot = '';
       this.availableSlots = [];
-      this.bookedSlots = [];
-
-      // ✅ ADDED
       this.allGeneratedSlots = [];
-
       this.slotError = '';
       this.reason = '';
       this.isEmergency = false;
@@ -149,10 +143,7 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
   onDateChange(): void {
     this.selectedSlot = '';
     this.availableSlots = [];
-
-    // ✅ ADDED
     this.allGeneratedSlots = [];
-
     this.slotError = '';
 
     if (!this.selectedDoctor || !this.selectedDate) return;
@@ -207,45 +198,28 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
         const m    = current % 60;
         const ampm = h < 12 ? 'AM' : 'PM';
         const h12  = h % 12 === 0 ? 12 : h % 12;
-
-        allSlots.push(
-          `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ampm}`
-        );
-
+        allSlots.push(`${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ampm}`);
         current += 15;
       }
     });
-
-    // ✅ ADDED
-    this.allGeneratedSlots = allSlots;
-
+  this.allGeneratedSlots = allSlots;
     this.availableSlots = allSlots.filter(slot => {
       if (this.bookedSlots.includes(slot)) return false;
 
       const isToday = this.selectedDate === new Date().toISOString().split('T')[0];
-
       if (isToday) {
         const now = new Date();
         const nowMinutes = now.getHours() * 60 + now.getMinutes();
-
         const [timePart, ampm] = slot.split(' ');
         const [h, m] = timePart.split(':').map(Number);
-
         let slotMinutes = h * 60 + m;
-
         if (ampm === 'PM' && h !== 12) slotMinutes += 720;
         if (ampm === 'AM' && h === 12) slotMinutes = m;
-
         if (slotMinutes <= nowMinutes) return false;
       }
 
       return true;
     });
-  }
-
-  // ✅ ADDED GETTER
-  get allSlotsBooked(): boolean {
-    return this.allGeneratedSlots.length > 0 && this.availableSlots.length === 0;
   }
 
   onSlotSelect(slot: string): void {
@@ -255,7 +229,10 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
   isSlotSelected(slot: string): boolean {
     return this.selectedSlot === slot;
   }
-
+get allSlotsBooked(): boolean {
+  return this.allGeneratedSlots.length > 0 &&
+         this.availableSlots.length === 0;
+}
   // ── Reason / Emergency detection ──────────────────────────
 
   private readonly EMERGENCY_KEYWORDS: Record<string, string[]> = {
@@ -271,32 +248,22 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
 
   private detectEmergencyLocally(reason: string): { isEmergency: boolean; category: string } {
     if (!reason || reason.trim().length < 3) return { isEmergency: false, category: '' };
-
     const lower = reason.toLowerCase();
-
     for (const [category, keywords] of Object.entries(this.EMERGENCY_KEYWORDS)) {
       for (const kw of keywords) {
-        if (lower.includes(kw)) {
-          return { isEmergency: true, category };
-        }
+        if (lower.includes(kw)) return { isEmergency: true, category };
       }
     }
-
     return { isEmergency: false, category: '' };
   }
 
   onReasonInput(): void {
     const result = this.detectEmergencyLocally(this.reason);
-
     this.zone.run(() => {
       this.isEmergency       = result.isEmergency;
       this.emergencyCategory = result.category;
       this.isDetecting       = false;
-
-      if (this.isEmergency) {
-        this.selectedSlot = '';
-      }
-
+      if (this.isEmergency) this.selectedSlot = '';
       this.cdr.detectChanges();
     });
   }
@@ -312,7 +279,6 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
       poisoning:       '☠️ Poisoning / Overdose',
       other_emergency: '🚨 Medical Emergency',
     };
-
     return labels[this.emergencyCategory] || '🚨 Emergency Detected';
   }
 
@@ -336,5 +302,195 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
     }
   }
 
-  // remaining code unchanged...
+  // ── Emergency booking ─────────────────────────────────────
+
+  private submitEmergencyAppointment(): void {
+    if (!this.isEmergencyFormValid) return;
+
+    this.zone.run(() => {
+      this.isSubmitting = true;
+      this.bookingError = '';
+      this.cdr.detectChanges();
+    });
+
+    this.appointmentService.bookEmergencyAppointment({
+      doctorId:  this.selectedDoctor!.id,
+      patientId: this.patientId,
+      reason:    this.reason,
+      category:  this.emergencyCategory,
+    }).subscribe({
+      next: (result) => {
+        this.zone.run(() => {
+          this.isSubmitting = false;
+          this.bookingSuccess = true;
+          this.bookedAppointmentTime = result.appointment.time;
+          this.resetForm();
+          this.cdr.detectChanges();
+        });
+      },
+      error: (err) => {
+        this.zone.run(() => {
+          if (err?.error?.doctorUnavailable) {
+            this.bookingError = '__unavailable__';
+            this.doctorUnavailableMessage = err.error.message;
+          } else {
+            this.bookingError = err?.error?.message || 'Emergency booking failed. Please try again.';
+          }
+          this.isSubmitting = false;
+          this.cdr.detectChanges();
+        });
+      }
+    });
+  }
+
+  // ── Normal booking ────────────────────────────────────────
+
+  private submitNormalAppointment(): void {
+    if (!this.isNormalFormValid) return;
+
+    this.zone.run(() => {
+      this.isSubmitting = true;
+      this.bookingError = '';
+      this.cdr.detectChanges();
+    });
+
+    // Cross-doctor conflict check: fetch all appointments for every doctor
+    // on this date in parallel, then check if this patient already holds
+    // the selected slot with any of them.
+    const allDoctorRequests = this.doctors.map(doctor =>
+      this.appointmentService.getAppointmentsByDoctorAndDate(doctor.id, this.selectedDate)
+    );
+
+    forkJoin(allDoctorRequests).subscribe({
+      next: (allResponses: any[]) => {
+        const allAppointmentsToday = allResponses.flatMap((response: any) =>
+          Array.isArray(response) ? response : response.data ?? []
+        );
+
+        const conflictingAppt = allAppointmentsToday.find(
+          (a: any) =>
+            a.patientName === this.patientId &&
+            a.time === this.selectedSlot &&
+            a.status !== 'cancelled' &&
+            a.status !== 'Cancelled'
+        );
+
+        if (conflictingAppt) {
+          const conflictDoctor = this.doctors.find(
+            d => Number(d.id) === Number(conflictingAppt.doctorId)
+          );
+          const conflictDoctorName = conflictDoctor?.name || `Doctor #${conflictingAppt.doctorId}`;
+
+          this.zone.run(() => {
+            this.bookingError =
+              `You already have an appointment at ${this.selectedSlot} with ${conflictDoctorName} on this date. ` +
+              `Please cancel that appointment first, or choose a different time slot.`;
+            this.isSubmitting = false;
+            this.cdr.detectChanges();
+          });
+          return;
+        }
+
+        // No frontend conflict found — proceed (backend will also guard with 409)
+        this.proceedWithBooking();
+      },
+      error: () => {
+        // If the cross-check network call fails, proceed anyway and let
+        // the backend 409 guard catch any real conflict.
+        this.proceedWithBooking();
+      }
+    });
+  }
+
+  // ── Core booking call ─────────────────────────────────────
+
+  private proceedWithBooking(): void {
+    this.zone.run(() => {
+      this.isSubmitting = true;
+      this.bookingError = '';
+      this.cdr.detectChanges();
+    });
+
+    const dateObj = new Date(this.selectedDate + 'T00:00:00');
+    const [time, ampm] = this.selectedSlot.split(' ');
+    const [h, m] = time.split(':').map(Number);
+    let hours = h;
+    if (ampm === 'PM' && h !== 12) hours += 12;
+    if (ampm === 'AM' && h === 12) hours = 0;
+    dateObj.setHours(hours, m, 0, 0);
+
+    const appointment: Appointment = {
+      doctorId:        this.selectedDoctor!.id,
+      patientName:     this.patientId,
+      appointmentDate: dateObj.toISOString(),
+      time:            this.selectedSlot,
+      priority:        'Normal',
+      status:          'pending',
+      reason:          this.reason || undefined,
+    };
+
+    this.appointmentService.bookAppointment(appointment).subscribe({
+      next: () => {
+        this.zone.run(() => {
+          this.isSubmitting = false;
+          this.bookingSuccess = true;
+          this.bookedAppointmentTime = this.selectedSlot;
+          this.resetForm();
+          this.cdr.detectChanges();
+        });
+      },
+      error: (err) => {
+        this.zone.run(() => {
+          const message = err?.error?.message || 'Failed to book appointment. Please try again.';
+          this.bookingError = message;
+          this.isSubmitting = false;
+          this.cdr.detectChanges();
+        });
+      }
+    });
+  }
+
+  // ── Helpers ───────────────────────────────────────────────
+
+  resetForm(): void {
+    this.selectedDoctor           = null;
+    this.selectedDate             = '';
+    this.selectedSlot             = '';
+    this.availableSlots           = [];
+    this.bookedSlots              = [];
+    this.allGeneratedSlots        = [];
+    this.slotError                = '';
+    this.reason                   = '';
+    this.isEmergency              = false;
+    this.emergencyCategory        = '';
+    this.doctorUnavailableMessage = '';
+  }
+
+  closeUnavailableModal(): void {
+    this.zone.run(() => {
+      this.bookingError = '';
+      this.doctorUnavailableMessage = '';
+    });
+  }
+
+  dismissSuccess(): void {
+    this.zone.run(() => {
+      this.bookingSuccess = false;
+      this.bookedAppointmentTime = '';
+    });
+  }
+
+  getFormattedDate(): string {
+    if (!this.selectedDate) return '';
+    const dateObj = new Date(this.selectedDate + 'T00:00:00');
+    return dateObj.toLocaleDateString('en-US', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+  }
+
+  getSelectedDayName(): string {
+    if (!this.selectedDate) return '';
+    const dateObj = new Date(this.selectedDate + 'T00:00:00');
+    return dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+  }
 }
