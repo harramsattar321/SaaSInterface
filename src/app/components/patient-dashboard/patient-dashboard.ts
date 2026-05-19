@@ -112,23 +112,31 @@ export class PatientDashboard implements OnInit, OnDestroy {
               statusLabel: this.getStatusLabel(appt.status || '', apptDate)
             };
           })
-          // ✅ Upcoming always on top, then descending by date within each group
           .sort((a, b) => {
             const aIsUpcoming = !a.isPast && a.status !== 'cancelled';
             const bIsUpcoming = !b.isPast && b.status !== 'cancelled';
 
-            // Upcoming group always comes before past/cancelled
+            // Upcoming group always before past/cancelled
             if (aIsUpcoming && !bIsUpcoming) return -1;
             if (!aIsUpcoming && bIsUpcoming) return 1;
 
-            // Within same group → descending by date (latest first)
+            if (aIsUpcoming && bIsUpcoming) {
+              // ✅ FIX 2: Within upcoming group → ascending by date (soonest first)
+              // so the appointment with the least time left is always at the top
+              return new Date(a.appointmentDate).getTime() - new Date(b.appointmentDate).getTime();
+            }
+
+            // Within past/cancelled group → descending (most recent first)
             return new Date(b.appointmentDate).getTime() - new Date(a.appointmentDate).getTime();
           });
 
+        // ✅ FIX 2: nextAppointment is now guaranteed to be the soonest upcoming one
+        // because upcoming group is sorted ascending above
         const upcoming = this.appointments.filter(
           a => !a.isPast && a.status !== 'cancelled'
         );
         this.nextAppointment = upcoming.length > 0 ? upcoming[0] : null;
+
         if (this.nextAppointment) {
           this.nextAppointment.isNext = true;
           this.startCountdown(new Date(this.nextAppointment.appointmentDate));
@@ -190,11 +198,11 @@ export class PatientDashboard implements OnInit, OnDestroy {
     if (!this.nextAppointment?.id) return;
 
     const payload = {
-      appointmentId: this.nextAppointment.id,
-      patientId: this.patientId,
+      appointmentId:   this.nextAppointment.id,
+      patientId:       this.patientId,
       appointmentTime: this.nextAppointment.time,
       appointmentDate: this.formatDate(this.nextAppointment.appointmentDate),
-      doctorName: this.nextAppointment.doctor?.name || 'Your Doctor'
+      doctorName:      this.nextAppointment.doctor?.name || 'Your Doctor'
     };
 
     this.appointmentService.sendReminder(payload).subscribe({
@@ -222,6 +230,14 @@ export class PatientDashboard implements OnInit, OnDestroy {
   }
 
   // ── CANCEL ────────────────────────────────────────────────
+
+  // ✅ FIX 3: returns true when appointment is within 12 hours — bind [disabled] in HTML
+  // Example: appointment at 10:00 AM → cancel button disabled after 10:00 PM the night before
+  isCancelDisabled(appt: EnrichedAppointment): boolean {
+    const hoursUntilAppt = (new Date(appt.appointmentDate).getTime() - Date.now()) / (1000 * 60 * 60);
+    return hoursUntilAppt > 0 && hoursUntilAppt <= 12;
+  }
+
   confirmCancel(appt: EnrichedAppointment): void {
     this.cancelTarget = appt;
     this.showCancelConfirm = true;
@@ -237,8 +253,8 @@ export class PatientDashboard implements OnInit, OnDestroy {
       next: () => {
         const appt = this.appointments.find(a => a.id === this.cancelTarget!.id);
         if (appt) {
-          appt.status = 'cancelled';
-          appt.isPast = true;
+          appt.status      = 'cancelled';
+          appt.isPast      = true;
           appt.statusLabel = 'Cancelled';
         }
         if (this.nextAppointment?.id === this.cancelTarget?.id) {
@@ -246,8 +262,8 @@ export class PatientDashboard implements OnInit, OnDestroy {
           if (this.countdownInterval) clearInterval(this.countdownInterval);
         }
         this.showCancelConfirm = false;
-        this.cancelTarget = null;
-        this.cancelLoading = false;
+        this.cancelTarget      = null;
+        this.cancelLoading     = false;
         this.cdr.detectChanges();
       },
       error: (err) => {
@@ -259,21 +275,22 @@ export class PatientDashboard implements OnInit, OnDestroy {
   }
 
   // ── RESCHEDULE ────────────────────────────────────────────
+
   openReschedule(appt: EnrichedAppointment): void {
-    this.rescheduleTarget = appt;
-    this.rescheduleDate = '';
-    this.rescheduleDayError = '';
-    this.rescheduleTimeSlots = [];
+    this.rescheduleTarget       = appt;
+    this.rescheduleDate         = '';
+    this.rescheduleDayError     = '';
+    this.rescheduleTimeSlots    = [];
     this.selectedRescheduleSlot = '';
-    this.rescheduleSuccess = false;
-    this.showRescheduleModal = true;
+    this.rescheduleSuccess      = false;
+    this.showRescheduleModal    = true;
     this.cdr.detectChanges();
   }
 
   onRescheduleDateChange(date: string): void {
-    this.rescheduleDate = date;
-    this.rescheduleDayError = '';
-    this.rescheduleTimeSlots = [];
+    this.rescheduleDate         = date;
+    this.rescheduleDayError     = '';
+    this.rescheduleTimeSlots    = [];
     this.selectedRescheduleSlot = '';
 
     if (!this.rescheduleTarget?.doctor || !date) return;
@@ -293,10 +310,7 @@ export class PatientDashboard implements OnInit, OnDestroy {
     this.isLoadingRescheduleSlots = true;
     this.cdr.detectChanges();
 
-    this.appointmentService.getAppointmentsByDoctorAndDate(
-      doctor.id,
-      date
-    ).subscribe({
+    this.appointmentService.getAppointmentsByDoctorAndDate(doctor.id, date).subscribe({
       next: (bookedAppointments) => {
         const bookedTimes = (bookedAppointments || []).map((a: any) => a.time);
         const allSlots = this.generateSlots(slotsForDay);
@@ -354,7 +368,7 @@ export class PatientDashboard implements OnInit, OnDestroy {
     const updatedAppt: Appointment = {
       ...this.rescheduleTarget,
       appointmentDate: dateObj.toISOString(),
-      time: this.selectedRescheduleSlot,
+      time:   this.selectedRescheduleSlot,
       status: 'pending'
     };
 
