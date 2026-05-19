@@ -395,7 +395,35 @@
   transform: none;
   box-shadow: none;
 }
+/* ─── Next Appointment: Cancel Button ─── */
+.next-actions button:first-of-type {
+  padding: 0.55rem 1rem;
+  border-radius: 10px;
+  border: 1.5px solid #ff4d4f;
+  background: rgba(255, 77, 79, 0.08);
+  color: #ff4d4f;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
 
+/* Hover */
+.next-actions button:first-of-type:hover:not(:disabled) {
+  background: #ff4d4f;
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(255, 77, 79, 0.25);
+}
+
+/* Disabled state */
+.next-actions button:first-of-type:disabled,
+.next-actions button.btn-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
 /* Optional: make it match your accent button height */
 .next-actions button {
   height: 38px;
