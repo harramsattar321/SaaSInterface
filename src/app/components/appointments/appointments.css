@@ -1441,7 +1441,43 @@
   vertical-align: middle;
   margin-right: 4px;
 }
+/* ─── Secondary Action Button (Cancel / Reschedule base) ─── */
+.action-btn {
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid #0D3B66;
+  background: #ffffff;
+  color: #0D3B66;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.reschedule-btn {
+  background: #ffffff;
+  border: 2px solid #0D3B66;
+  color: #0D3B66;
+}
 
+.reschedule-btn:hover {
+  background: #0D3B66;
+  color: #ffffff;
+}
+.cancel-btn {
+  background: #ffffff;
+  border: 2px solid #c62828;
+  color: #c62828;
+}
+
+.cancel-btn:hover {
+  background: #c62828;
+  color: #ffffff;
+}
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
