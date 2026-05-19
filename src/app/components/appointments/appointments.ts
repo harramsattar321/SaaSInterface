@@ -339,15 +339,11 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
 
   // ── Normal booking ────────────────────────────────────────
 
+  
   private submitNormalAppointment(): void {
-    if (!this.isNormalFormValid) return;
-
-    this.zone.run(() => {
-      this.isSubmitting = true;
-      this.bookingError = '';
-      this.cdr.detectChanges();
-    });
-
+  if (!this.isNormalFormValid) return;
+  this.proceedWithBooking();        // backend will reject duplicates with 409
+}
     // ✅ FIX 1: Check cross-doctor conflicts on the same date + time slot.
     // Fetch ALL appointments for this patient on the selected date (all doctors).
     // We do this by fetching appointments per doctor for the selected date and
