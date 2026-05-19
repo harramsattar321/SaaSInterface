@@ -439,24 +439,30 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
         });
       },
       error: async (err) => {
-        this.zone.run(async () => {
-          let message = 'Failed to book appointment. Please try again.';
-          try {
-            if (err?.error?.message) {
-              message = err.error.message;
-            } else if (err?.error instanceof ReadableStream) {
-              const reader = err.error.getReader();
-              const decoder = new TextDecoder();
-              let result = '';
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                result += decoder.decode(value);
-              }
-              const parsed = JSON.parse(result);
-              message = parsed.message || message;
-            }
-          } catch (e) { /* ignore */ }
+  this.zone.run(async () => {
+    let message = 'Failed to book appointment. Please try again.';
+    try {
+      if (err?.error?.message) {
+        message = err.error.message;            // ← catches your new 409 message
+      } else if (err?.error instanceof ReadableStream) {
+        const reader = err.error.getReader();
+        const decoder = new TextDecoder();
+        let result = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          result += decoder.decode(value);
+        }
+        const parsed = JSON.parse(result);
+        message = parsed.message || message;
+      }
+    } catch (e) { /* ignore */ }
+
+    this.bookingError = message;               // already displayed in your template
+    this.isSubmitting = false;
+    this.cdr.detectChanges();
+  });
+} catch (e) { /* ignore */ }
           this.bookingError = message;
           this.isSubmitting = false;
           this.cdr.detectChanges();
