@@ -116,22 +116,16 @@ export class PatientDashboard implements OnInit, OnDestroy {
             const aIsUpcoming = !a.isPast && a.status !== 'cancelled';
             const bIsUpcoming = !b.isPast && b.status !== 'cancelled';
 
-            // Upcoming group always before past/cancelled
             if (aIsUpcoming && !bIsUpcoming) return -1;
             if (!aIsUpcoming && bIsUpcoming) return 1;
 
             if (aIsUpcoming && bIsUpcoming) {
-              // ✅ FIX 2: Within upcoming group → ascending by date (soonest first)
-              // so the appointment with the least time left is always at the top
               return new Date(a.appointmentDate).getTime() - new Date(b.appointmentDate).getTime();
             }
 
-            // Within past/cancelled group → descending (most recent first)
             return new Date(b.appointmentDate).getTime() - new Date(a.appointmentDate).getTime();
           });
 
-        // ✅ FIX 2: nextAppointment is now guaranteed to be the soonest upcoming one
-        // because upcoming group is sorted ascending above
         const upcoming = this.appointments.filter(
           a => !a.isPast && a.status !== 'cancelled'
         );
@@ -231,9 +225,14 @@ export class PatientDashboard implements OnInit, OnDestroy {
 
   // ── CANCEL ────────────────────────────────────────────────
 
-  // ✅ FIX 3: returns true when appointment is within 12 hours — bind [disabled] in HTML
-  // Example: appointment at 10:00 AM → cancel button disabled after 10:00 PM the night before
+  // Returns true when appointment is within 12 hours — Cancel button disabled
   isCancelDisabled(appt: EnrichedAppointment): boolean {
+    const hoursUntilAppt = (new Date(appt.appointmentDate).getTime() - Date.now()) / (1000 * 60 * 60);
+    return hoursUntilAppt > 0 && hoursUntilAppt <= 12;
+  }
+
+  // Returns true when appointment is within 12 hours — Reschedule button disabled
+  isRescheduleDisabled(appt: EnrichedAppointment): boolean {
     const hoursUntilAppt = (new Date(appt.appointmentDate).getTime() - Date.now()) / (1000 * 60 * 60);
     return hoursUntilAppt > 0 && hoursUntilAppt <= 12;
   }
