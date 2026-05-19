@@ -4,7 +4,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef, NgZone } from '@angula
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { Subject } from 'rxjs';
+import { Subject, forkJoin } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { AppointmentService, Doctor, Appointment } from '../../services/appointment.service';
 
@@ -33,7 +33,7 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
   reason: string = '';
   isEmergency: boolean = false;
   emergencyCategory: string = '';
-  isDetecting: boolean = false;          // spinner while calling /detect
+  isDetecting: boolean = false;
 
   // ── UI flags ──────────────────────────────────────────────
   isLoadingDoctors: boolean = false;
@@ -41,14 +41,13 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
   isSubmitting: boolean = false;
 
   bookingSuccess: boolean = false;
-  bookedAppointmentTime: string = '';    // shown in success banner for emergency
+  bookedAppointmentTime: string = '';
   bookingError: string = '';
   slotError: string = '';
-  doctorUnavailableMessage: string = ''; // set when doctor is not available for emergency
+  doctorUnavailableMessage: string = '';
 
   patientId: string = '';
 
-  // ── Debounce cleanup only ─────────────────────────────────
   private destroy$ = new Subject<void>();
 
   constructor(
@@ -118,7 +117,6 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
       this.selectedSlot = '';
       this.availableSlots = [];
       this.slotError = '';
-      // Reset reason/emergency when doctor changes
       this.reason = '';
       this.isEmergency = false;
       this.emergencyCategory = '';
@@ -203,10 +201,8 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
     });
 
     this.availableSlots = allSlots.filter(slot => {
-      // Remove already-booked slots
       if (this.bookedSlots.includes(slot)) return false;
 
-      // ✅ FIX Issue 1: if selected date is today, hide slots that are already past
       const isToday = this.selectedDate === new Date().toISOString().split('T')[0];
       if (isToday) {
         const now = new Date();
@@ -216,7 +212,7 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
         let slotMinutes = h * 60 + m;
         if (ampm === 'PM' && h !== 12) slotMinutes += 720;
         if (ampm === 'AM' && h === 12) slotMinutes = m;
-        if (slotMinutes <= nowMinutes) return false; // past slot — hide it
+        if (slotMinutes <= nowMinutes) return false;
       }
 
       return true;
@@ -233,7 +229,6 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
 
   // ── Reason / Emergency detection ──────────────────────────
 
-  // Full keyword list — mirrors emergency.routes.ts on the backend
   private readonly EMERGENCY_KEYWORDS: Record<string, string[]> = {
     cardiac:         ['heart attack','chest pain','chest tightness','cardiac arrest','heart pain','heart failure','palpitations','irregular heartbeat','angina','myocardial','heart pressure','left arm pain','jaw pain','shortness of breath','cant breathe',"can't breathe",'difficulty breathing','breathing difficulty','breathless'],
     accident:        ['accident','car crash','road accident','vehicle accident','motorcycle accident','bike accident','hit by car','fell','fall','fallen','fracture','broken bone','broken arm','broken leg','head injury','head trauma','skull','concussion','trauma','bleeding','blood loss','heavy bleeding','wound','deep cut','laceration','internal bleeding'],
@@ -245,7 +240,6 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
     other_emergency: ['emergency','urgent','critical','serious condition','life threatening','life-threatening','immediately','right now','help me','vomiting blood','blood in vomit','coughing blood','seizure','convulsion','epilepsy attack','high fever','fever 40','fever 41','fever 42'],
   };
 
-  /** Detect emergency purely on the frontend — no network call, works on any deployment */
   private detectEmergencyLocally(reason: string): { isEmergency: boolean; category: string } {
     if (!reason || reason.trim().length < 3) return { isEmergency: false, category: '' };
     const lower = reason.toLowerCase();
@@ -257,14 +251,12 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
     return { isEmergency: false, category: '' };
   }
 
-  /** Called on every keystroke in the reason textarea */
   onReasonInput(): void {
-    // Run detection synchronously — no API call, no spinner, instant result
     const result = this.detectEmergencyLocally(this.reason);
     this.zone.run(() => {
-      this.isEmergency     = result.isEmergency;
+      this.isEmergency       = result.isEmergency;
       this.emergencyCategory = result.category;
-      this.isDetecting     = false;
+      this.isDetecting       = false;
       if (this.isEmergency) this.selectedSlot = '';
       this.cdr.detectChanges();
     });
@@ -333,7 +325,6 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.zone.run(() => {
           if (err?.error?.doctorUnavailable) {
-            // Doctor not available today or slot outside working hours
             this.bookingError = '__unavailable__';
             this.doctorUnavailableMessage = err.error.message;
           } else {
@@ -351,29 +342,64 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
   private submitNormalAppointment(): void {
     if (!this.isNormalFormValid) return;
 
-    // ✅ FIX Issue 2: only block if patient already has THIS EXACT SLOT booked
-    // (not just any appointment on the same day — they can book multiple slots)
-    this.appointmentService.getAppointmentsByDoctorAndDate(
-      this.selectedDoctor!.id,
-      this.selectedDate
-    ).subscribe({
-      next: (response: any) => {
-        const appointments = Array.isArray(response) ? response : response.data ?? [];
-        const slotAlreadyBooked = appointments.some(
-          (a: any) => a.patientName === this.patientId && a.time === this.selectedSlot
+    this.zone.run(() => {
+      this.isSubmitting = true;
+      this.bookingError = '';
+      this.cdr.detectChanges();
+    });
+
+    // ✅ FIX 1: Check cross-doctor conflicts on the same date + time slot.
+    // Fetch ALL appointments for this patient on the selected date (all doctors).
+    // We do this by fetching appointments per doctor for the selected date and
+    // checking if the patient already has the same time slot with any other doctor.
+    //
+    // Strategy: fetch appointments for every doctor on this date in parallel,
+    // then check if this patient already has selectedSlot with any of them.
+    const allDoctorRequests = this.doctors.map(doctor =>
+      this.appointmentService.getAppointmentsByDoctorAndDate(doctor.id, this.selectedDate)
+    );
+
+    forkJoin(allDoctorRequests).subscribe({
+      next: (allResponses: any[]) => {
+        // Flatten all appointments across all doctors for this date
+        const allAppointmentsToday = allResponses.flatMap((response: any) =>
+          Array.isArray(response) ? response : response.data ?? []
         );
 
-        if (slotAlreadyBooked) {
+        // Find if THIS patient already has selectedSlot with ANY doctor today
+        const conflictingAppt = allAppointmentsToday.find(
+          (a: any) =>
+            a.patientName === this.patientId &&
+            a.time === this.selectedSlot &&
+            a.status !== 'cancelled' &&
+            a.status !== 'Cancelled'
+        );
+
+        if (conflictingAppt) {
+          // Find the doctor name for the conflicting appointment
+          const conflictDoctor = this.doctors.find(
+            d => Number(d.id) === Number(conflictingAppt.doctorId)
+          );
+          const conflictDoctorName = conflictDoctor?.name || `Doctor #${conflictingAppt.doctorId}`;
+
           this.zone.run(() => {
-            this.bookingError = `You already have an appointment at ${this.selectedSlot} with ${this.selectedDoctor!.name}. Please choose a different time slot.`;
+            this.bookingError =
+              `You already have an appointment at ${this.selectedSlot} with ${conflictDoctorName} on this date. ` +
+              `Please cancel that appointment first, or choose a different time slot.`;
+            this.isSubmitting = false;
             this.cdr.detectChanges();
           });
           return;
         }
 
+        // No conflict — proceed with booking
         this.proceedWithBooking();
       },
-      error: () => this.proceedWithBooking()
+      error: () => {
+        // If the cross-check fails for any reason, proceed anyway
+        // (don't block the patient due to a network error in the check)
+        this.proceedWithBooking();
+      }
     });
   }
 
@@ -442,14 +468,14 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
   // ── Helpers ───────────────────────────────────────────────
 
   resetForm(): void {
-    this.selectedDoctor  = null;
-    this.selectedDate    = '';
-    this.selectedSlot    = '';
-    this.availableSlots  = [];
-    this.bookedSlots     = [];
-    this.slotError       = '';
-    this.reason          = '';
-    this.isEmergency     = false;
+    this.selectedDoctor    = null;
+    this.selectedDate      = '';
+    this.selectedSlot      = '';
+    this.availableSlots    = [];
+    this.bookedSlots       = [];
+    this.slotError         = '';
+    this.reason            = '';
+    this.isEmergency       = false;
     this.emergencyCategory = '';
     this.doctorUnavailableMessage = '';
   }
