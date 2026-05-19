@@ -1,4 +1,4 @@
-// src/app/components/appointments/appointments.ts — FULL UPDATED FILE
+// src/app/components/appointments/appointments.ts
 
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -191,10 +191,10 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
       const end   = endH * 60 + endM;
 
       while (current + 15 <= end) {
-        const h     = Math.floor(current / 60);
-        const m     = current % 60;
-        const ampm  = h < 12 ? 'AM' : 'PM';
-        const h12   = h % 12 === 0 ? 12 : h % 12;
+        const h    = Math.floor(current / 60);
+        const m    = current % 60;
+        const ampm = h < 12 ? 'AM' : 'PM';
+        const h12  = h % 12 === 0 ? 12 : h % 12;
         allSlots.push(`${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ampm}`);
         current += 15;
       }
@@ -339,30 +339,28 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
 
   // ── Normal booking ────────────────────────────────────────
 
-  
   private submitNormalAppointment(): void {
-  if (!this.isNormalFormValid) return;
-  this.proceedWithBooking();        // backend will reject duplicates with 409
-}
-    // ✅ FIX 1: Check cross-doctor conflicts on the same date + time slot.
-    // Fetch ALL appointments for this patient on the selected date (all doctors).
-    // We do this by fetching appointments per doctor for the selected date and
-    // checking if the patient already has the same time slot with any other doctor.
-    //
-    // Strategy: fetch appointments for every doctor on this date in parallel,
-    // then check if this patient already has selectedSlot with any of them.
+    if (!this.isNormalFormValid) return;
+
+    this.zone.run(() => {
+      this.isSubmitting = true;
+      this.bookingError = '';
+      this.cdr.detectChanges();
+    });
+
+    // Cross-doctor conflict check: fetch all appointments for every doctor
+    // on this date in parallel, then check if this patient already holds
+    // the selected slot with any of them.
     const allDoctorRequests = this.doctors.map(doctor =>
       this.appointmentService.getAppointmentsByDoctorAndDate(doctor.id, this.selectedDate)
     );
 
     forkJoin(allDoctorRequests).subscribe({
       next: (allResponses: any[]) => {
-        // Flatten all appointments across all doctors for this date
         const allAppointmentsToday = allResponses.flatMap((response: any) =>
           Array.isArray(response) ? response : response.data ?? []
         );
 
-        // Find if THIS patient already has selectedSlot with ANY doctor today
         const conflictingAppt = allAppointmentsToday.find(
           (a: any) =>
             a.patientName === this.patientId &&
@@ -372,7 +370,6 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
         );
 
         if (conflictingAppt) {
-          // Find the doctor name for the conflicting appointment
           const conflictDoctor = this.doctors.find(
             d => Number(d.id) === Number(conflictingAppt.doctorId)
           );
@@ -388,16 +385,18 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
           return;
         }
 
-        // No conflict — proceed with booking
+        // No frontend conflict found — proceed (backend will also guard with 409)
         this.proceedWithBooking();
       },
       error: () => {
-        // If the cross-check fails for any reason, proceed anyway
-        // (don't block the patient due to a network error in the check)
+        // If the cross-check network call fails, proceed anyway and let
+        // the backend 409 guard catch any real conflict.
         this.proceedWithBooking();
       }
     });
   }
+
+  // ── Core booking call ─────────────────────────────────────
 
   private proceedWithBooking(): void {
     this.zone.run(() => {
@@ -434,31 +433,9 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
           this.cdr.detectChanges();
         });
       },
-      error: async (err) => {
-  this.zone.run(async () => {
-    let message = 'Failed to book appointment. Please try again.';
-    try {
-      if (err?.error?.message) {
-        message = err.error.message;            // ← catches your new 409 message
-      } else if (err?.error instanceof ReadableStream) {
-        const reader = err.error.getReader();
-        const decoder = new TextDecoder();
-        let result = '';
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          result += decoder.decode(value);
-        }
-        const parsed = JSON.parse(result);
-        message = parsed.message || message;
-      }
-    } catch (e) { /* ignore */ }
-
-    this.bookingError = message;               // already displayed in your template
-    this.isSubmitting = false;
-    this.cdr.detectChanges();
-  });
-} catch (e) { /* ignore */ }
+      error: (err) => {
+        this.zone.run(() => {
+          const message = err?.error?.message || 'Failed to book appointment. Please try again.';
           this.bookingError = message;
           this.isSubmitting = false;
           this.cdr.detectChanges();
@@ -470,15 +447,15 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
   // ── Helpers ───────────────────────────────────────────────
 
   resetForm(): void {
-    this.selectedDoctor    = null;
-    this.selectedDate      = '';
-    this.selectedSlot      = '';
-    this.availableSlots    = [];
-    this.bookedSlots       = [];
-    this.slotError         = '';
-    this.reason            = '';
-    this.isEmergency       = false;
-    this.emergencyCategory = '';
+    this.selectedDoctor           = null;
+    this.selectedDate             = '';
+    this.selectedSlot             = '';
+    this.availableSlots           = [];
+    this.bookedSlots              = [];
+    this.slotError                = '';
+    this.reason                   = '';
+    this.isEmergency              = false;
+    this.emergencyCategory        = '';
     this.doctorUnavailableMessage = '';
   }
 
