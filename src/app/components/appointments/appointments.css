@@ -105,7 +105,27 @@
   gap: 1.75rem;
   align-items: start;
 }
+.dismiss-btn {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
 
+  /* ✅ THIS is what you need */
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  transition: all 0.2s ease;
+}
+
+.dismiss-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
 @media (max-width: 768px) {
   .booking-layout {
     grid-template-columns: 1fr;
