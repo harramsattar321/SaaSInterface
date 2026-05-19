@@ -382,7 +382,7 @@
   padding: 2px 8px; border-radius: 4px; letter-spacing: 0.02em;
 }
 .status-pending   { background: var(--blue-pale); color: var(--navy-mid); }
-.status-cancelled { background: var(--rose-pale); color: var(--rose); }
+.status-cancelled { background: var(--rose-pale); color: var(--rose); border-radius: 10px;}
 .status-completed { background: var(--green-pale); color: var(--green); }
 
 .appt-priority {
@@ -403,8 +403,8 @@
   transition: all 0.15s; color: var(--ink2); white-space: nowrap;
 }
 .text-btn:hover { border-color: var(--blue-light); color: var(--navy-mid); background: var(--blue-pale); }
-.text-btn.cancel-btn { color: var(--ink3); }
-.text-btn.cancel-btn:hover { border-color: #fca5a5; color: var(--rose); background: var(--rose-pale); }
+.text-btn.cancel-btn { color: var(--ink3);border-radius: 10px; }
+.text-btn.cancel-btn:hover { border-color: #fca5a5; color: var(--rose); background: var(--rose-pale); border-radius: 10px;}
 
 /* ══ MODALS ═══════════════════════════════════════════ */
 .modal-backdrop {
@@ -480,7 +480,7 @@
   font-size: 13px; font-weight: 500; transition: all 0.15s;
 }
 .modal-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.cancel-modal-btn  { background: var(--off); color: var(--ink2); border: 1px solid var(--border2); }
+.cancel-modal-btn  { background: var(--off); border-radius: 10px;color: var(--ink2); border: 1px solid var(--border2); }
 .cancel-modal-btn:hover { background: var(--border); }
 .confirm-modal-btn { background: var(--navy-mid); color: #fff; }
 .confirm-modal-btn:hover:not(:disabled) { background: var(--blue); }
