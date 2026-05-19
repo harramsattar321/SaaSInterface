@@ -209,7 +209,7 @@
           class="book-btn emergency-btn"
           (click)="submitAppointment()"
           [disabled]="!isEmergencyFormValid || isSubmitting">
-          <span *ngIf="!isSubmitting">🚨 Confirm Emergency Appointment</span>
+          <span *ngIf="!isSubmitting"> Confirm Emergency Appointment</span>
           <span *ngIf="isSubmitting" class="btn-loading">
             <span class="spinner-sm"></span> Booking...
           </span>
@@ -244,7 +244,7 @@
         <button
           class="book-btn"
           (click)="submitAppointment()"
-          [disabled]="!isNormalFormValid || isSubmitting">
+          [disabled]="!isNormalFormValid && !isEmergencyFormValid || isSubmitting">
           <span *ngIf="!isSubmitting">Confirm Appointment</span>
           <span *ngIf="isSubmitting" class="btn-loading">
             <span class="spinner-sm"></span> Booking...
