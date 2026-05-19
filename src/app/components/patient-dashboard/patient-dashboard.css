@@ -494,7 +494,33 @@
   from { transform: translateY(12px); opacity: 0; }
   to   { transform: translateY(0);    opacity: 1; }
 }
+/* ─── Next Appointment: Cancel Button (Clean Style) ─── */
+.next-actions button:first-of-type {
+  padding: 0.55rem 1rem;
+  border-radius: 10px;
+  border: 1px solid #d0d5dd;
+  background: #ffffff;
+  color: #111827;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
 
+/* Hover */
+.next-actions button:first-of-type:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #bfc4cc;
+  transform: translateY(-1px);
+}
+
+/* Disabled state */
+.next-actions button:first-of-type:disabled,
+.next-actions button.btn-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
 .modal-header {
   display: flex; justify-content: space-between;
   align-items: center; margin-bottom: 8px;
