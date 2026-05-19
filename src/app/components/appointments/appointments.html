@@ -169,9 +169,18 @@
               {{ slot }}
             </button>
           </div>
-          <p class="no-slots" *ngIf="availableSlots.length === 0 && selectedDate">
-            No available slots for this date. Please try another date.
-          </p>
+          <!-- All slots booked -->
+<div *ngIf="allSlotsBooked" class="slots-message slots-full">
+  All time slots are fully booked for this date. Please try a different date.
+</div>
+
+<!-- No schedule available -->
+<div
+  *ngIf="!allSlotsBooked && availableSlots.length === 0 && selectedDate && !isLoadingSlots && !slotError"
+  class="slots-message slots-empty"
+>
+  No available slots for this date. Please try another date.
+</div>
         </div>
       </div>
 
