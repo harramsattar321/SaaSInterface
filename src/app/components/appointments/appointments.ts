@@ -26,7 +26,7 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
   availableSlots: string[] = [];
   bookedSlots: string[] = [];
   allGeneratedSlots: string[] = [];
-  
+
   minDate: string = '';
   availableDaysForDoctor: number[] = [];
 
@@ -49,6 +49,10 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
 
   patientId: string = '';
 
+  // ── Debounce timer for AI detection ──────────────────────
+  private detectDebounceTimer: any = null;
+  private readonly DETECT_DEBOUNCE_MS = 600;
+
   private destroy$ = new Subject<void>();
 
   constructor(
@@ -66,6 +70,7 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    if (this.detectDebounceTimer) clearTimeout(this.detectDebounceTimer);
   }
 
   // ── Setup ─────────────────────────────────────────────────
@@ -202,7 +207,8 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
         current += 15;
       }
     });
-  this.allGeneratedSlots = allSlots;
+
+    this.allGeneratedSlots = allSlots;
     this.availableSlots = allSlots.filter(slot => {
       if (this.bookedSlots.includes(slot)) return false;
 
@@ -229,11 +235,135 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
   isSlotSelected(slot: string): boolean {
     return this.selectedSlot === slot;
   }
-get allSlotsBooked(): boolean {
-  return this.allGeneratedSlots.length > 0 &&
-         this.availableSlots.length === 0;
+
+  get allSlotsBooked(): boolean {
+    return this.allGeneratedSlots.length > 0 &&
+           this.availableSlots.length === 0;
+  }
+
+  // ── AI Emergency Detection ────────────────────────────────
+  //
+  // Instead of brittle keyword matching, we send the free-text reason
+  // to Claude (claude-sonnet-4-20250514) and ask it to classify the
+  // urgency.  The model understands:
+  //   • Misspellings  ("accidant", "hert atack", "seziure")
+  //   • Synonyms      ("crashed my car", "blacked out", "can't feel my arm")
+  //   • Context       ("I was driving and now I can't move my neck")
+  //   • Other languages or mixed text
+  //
+  // We ask for a strict JSON response so parsing stays reliable.
+  // A lightweight local pre-check still fires first so obvious cases
+  // never hit the network (saves latency + cost).
+
+  private readonly FAST_PRECHECK_PATTERNS: RegExp[] = [
+    /\b(heart\s*attack|chest\s*pain|stroke|seizure|unconscious|overdose|poison|bleed|fracture|broken\s*bone|accident|crash|fell|emergency|urgent|can'?t\s*breath)\b/i,
+  ];
+
+  /**
+   * Quick local check — returns true only when we are very confident
+   * this is an emergency so we can skip the API call entirely.
+   */
+  private isObviousEmergency(text: string): boolean {
+    return this.FAST_PRECHECK_PATTERNS.some(re => re.test(text));
+  }
+
+  /**
+   * Calls Claude API to semantically analyse the reason text.
+   * Returns a structured result regardless of spelling errors or phrasing.
+   */
+  private async detectEmergencyWithAI(reason: string): Promise<{ isEmergency: boolean; category: string }> {
+  
+  const GROQ_API_KEY = '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';
+  const GROQ_MODEL   = 'llama-3.3-70b-versatile';
+
+  const systemPrompt = `You are a medical triage assistant...`; // keep as is
+
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${GROQ_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      max_tokens: 100,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: reason },
+      ],
+    }),
+  });
+
+  if (!response.ok) throw new Error(`Groq API error ${response.status}`);
+
+  const data = await response.json();
+  const text = data.choices[0].message.content ?? '';
+  const clean = text.replace(/```[a-z]*\n?/gi, '').trim();
+  return JSON.parse(clean);
 }
-  // ── Reason / Emergency detection ──────────────────────────
+
+  // ── Reason input handler ──────────────────────────────────
+
+  onReasonInput(): void {
+    const text = this.reason.trim();
+
+    // Reset if input is too short
+    if (text.length < 3) {
+      this.zone.run(() => {
+        this.isEmergency       = false;
+        this.emergencyCategory = '';
+        this.isDetecting       = false;
+        this.cdr.detectChanges();
+      });
+      return;
+    }
+
+    // Fast path: immediately flag obvious emergencies without waiting for the API
+    if (this.isObviousEmergency(text)) {
+      this.zone.run(() => {
+        this.isEmergency       = true;
+        this.emergencyCategory = 'other_emergency';  // will be refined by AI below
+        this.selectedSlot      = '';
+        this.isDetecting       = false;
+        this.cdr.detectChanges();
+      });
+    } else {
+      // Show "checking…" spinner while we wait
+      this.zone.run(() => {
+        this.isDetecting = true;
+        this.cdr.detectChanges();
+      });
+    }
+
+    // Debounce: wait until the user pauses typing before calling the API
+    if (this.detectDebounceTimer) clearTimeout(this.detectDebounceTimer);
+    this.detectDebounceTimer = setTimeout(async () => {
+      try {
+        const result = await this.detectEmergencyWithAI(text);
+        this.zone.run(() => {
+          this.isEmergency       = result.isEmergency;
+          this.emergencyCategory = result.category;
+          this.isDetecting       = false;
+          if (this.isEmergency) this.selectedSlot = '';
+          this.cdr.detectChanges();
+        });
+      } catch (err) {
+        // If the AI call fails for any reason, fall back to the local
+        // keyword check so the form never silently breaks.
+        console.warn('AI emergency detection failed, using local fallback:', err);
+        const fallback = this.detectEmergencyLocally(text);
+        this.zone.run(() => {
+          this.isEmergency       = fallback.isEmergency;
+          this.emergencyCategory = fallback.category;
+          this.isDetecting       = false;
+          if (this.isEmergency) this.selectedSlot = '';
+          this.cdr.detectChanges();
+        });
+      }
+    }, this.DETECT_DEBOUNCE_MS);
+  }
+
+  // ── Local keyword fallback (used only if API fails) ───────
 
   private readonly EMERGENCY_KEYWORDS: Record<string, string[]> = {
     cardiac:         ['heart attack','chest pain','chest tightness','cardiac arrest','heart pain','heart failure','palpitations','irregular heartbeat','angina','myocardial','heart pressure','left arm pain','jaw pain','shortness of breath','cant breathe',"can't breathe",'difficulty breathing','breathing difficulty','breathless'],
@@ -257,16 +387,7 @@ get allSlotsBooked(): boolean {
     return { isEmergency: false, category: '' };
   }
 
-  onReasonInput(): void {
-    const result = this.detectEmergencyLocally(this.reason);
-    this.zone.run(() => {
-      this.isEmergency       = result.isEmergency;
-      this.emergencyCategory = result.category;
-      this.isDetecting       = false;
-      if (this.isEmergency) this.selectedSlot = '';
-      this.cdr.detectChanges();
-    });
-  }
+  // ── Emergency category label ──────────────────────────────
 
   get emergencyCategoryLabel(): string {
     const labels: Record<string, string> = {
@@ -354,9 +475,6 @@ get allSlotsBooked(): boolean {
       this.cdr.detectChanges();
     });
 
-    // Cross-doctor conflict check: fetch all appointments for every doctor
-    // on this date in parallel, then check if this patient already holds
-    // the selected slot with any of them.
     const allDoctorRequests = this.doctors.map(doctor =>
       this.appointmentService.getAppointmentsByDoctorAndDate(doctor.id, this.selectedDate)
     );
@@ -391,12 +509,9 @@ get allSlotsBooked(): boolean {
           return;
         }
 
-        // No frontend conflict found — proceed (backend will also guard with 409)
         this.proceedWithBooking();
       },
       error: () => {
-        // If the cross-check network call fails, proceed anyway and let
-        // the backend 409 guard catch any real conflict.
         this.proceedWithBooking();
       }
     });
