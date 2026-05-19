@@ -74,12 +74,11 @@
             </div>
             <div class="next-actions">
               <button
-  (click)="confirmCancel(appt)"
-  [disabled]="isCancelDisabled(appt)"
-  [title]="isCancelDisabled(appt) ? 'Cancellation not allowed within 12 hours of appointment' : 'Cancel appointment'"
-  [class.btn-disabled]="isCancelDisabled(appt)">
+  (click)="confirmCancel(nextAppointment)"
+  [disabled]="isCancelDisabled(nextAppointment)"
+  [title]="isCancelDisabled(nextAppointment) ? 'Cancellation not allowed within 12 hours of appointment' : 'Cancel appointment'"
+  [class.btn-disabled]="isCancelDisabled(nextAppointment)">
   Cancel
-</button>
               <button class="mini-btn accent" (click)="openReschedule(nextAppointment)">Reschedule</button>
             </div>
           </div>
