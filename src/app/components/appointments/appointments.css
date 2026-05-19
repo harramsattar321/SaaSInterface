@@ -1190,7 +1190,45 @@
 .modal-ok-btn:hover {
   opacity: 0.9;
 }
+/* 🚨 Alert container (All slots booked / no slots available) */
+.slots-message {
+  padding: 14px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 500;
+  line-height: 1.4;
+}
 
+/* ❌ Fully booked (red alert style) */
+.slots-full {
+  background: #fff5f5;
+  border: 1px solid #ffcccc;
+  color: #b91c1c;
+  box-shadow: 0 4px 10px rgba(255, 0, 0, 0.08);
+}
+
+/* ℹ️ No schedule available (orange/warning style) */
+.slots-empty {
+  background: #fffaf0;
+  border: 1px solid #ffe0b2;
+  color: #b45309;
+  box-shadow: 0 4px 10px rgba(255, 165, 0, 0.08);
+}
+
+/* small alert icon (optional if you add emoji in HTML) */
+.slots-message::before {
+  font-size: 18px;
+}
+
+/* optional hover effect */
+.slots-message:hover {
+  transform: scale(1.01);
+  transition: 0.2s ease;
+}
 /* ============================================================
    ADD THESE STYLES to your existing appointments.css
    ============================================================ */
