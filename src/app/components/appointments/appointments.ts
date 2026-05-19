@@ -476,31 +476,37 @@ Examples:
 
   get emergencyCategoryLabel(): string {
     const labels: Record<string, string> = {
-      cardiac:         '❤️ Cardiac Emergency',
-      accident:        '🚨 Accident / Trauma',
-      stroke:          '🧠 Stroke',
-      unconscious:     '⚠️ Loss of Consciousness',
-      severe_pain:     '🔴 Severe Pain',
-      allergic:        '⚠️ Allergic Reaction',
-      poisoning:       '☠️ Poisoning / Overdose',
-      other_emergency: '🚨 Medical Emergency',
+      cardiac:         ' Cardiac Emergency',
+      accident:        ' Accident / Trauma',
+      stroke:          ' Stroke',
+      unconscious:     ' Loss of Consciousness',
+      severe_pain:     ' Severe Pain',
+      allergic:        ' Allergic Reaction',
+      poisoning:       ' Poisoning / Overdose',
+      other_emergency: ' Medical Emergency',
     };
-    return labels[this.emergencyCategory] || '🚨 Emergency Detected';
+    return labels[this.emergencyCategory] || ' Emergency Detected';
   }
 
   // ── Form validation ───────────────────────────────────────
 
   get isNormalFormValid(): boolean {
-    return !!this.selectedDoctor && !!this.selectedDate && !!this.selectedSlot && !!this.patientId;
+    return !!this.selectedDoctor && !!this.selectedDate && !!this.selectedSlot && !!this.patientId &&
+         this.reason.trim().length > 0;
   }
 
   get isEmergencyFormValid(): boolean {
-    return !!this.selectedDoctor && !!this.patientId && this.isEmergency;
+    return !!this.selectedDoctor && !!this.patientId && this.isEmergency&&
+         this.reason.trim().length > 0;
   }
 
   // ── Submit ────────────────────────────────────────────────
 
   submitAppointment(): void {
+    if (!this.reason || this.reason.trim().length === 0) {
+    this.bookingError = "Please enter a reason for the appointment.";
+    return;
+  }
     if (this.isEmergency) {
       this.submitEmergencyAppointment();
     } else {
