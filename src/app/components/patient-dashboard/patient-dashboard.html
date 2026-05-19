@@ -80,7 +80,14 @@
                 [class.btn-disabled]="isCancelDisabled(nextAppointment)">
                 Cancel
               </button>
-              <button class="mini-btn accent" (click)="openReschedule(nextAppointment)">Reschedule</button>
+              <button
+  class="mini-btn accent"
+  (click)="openReschedule(nextAppointment)"
+  [disabled]="isCancelDisabled(nextAppointment)"
+  [title]="isCancelDisabled(nextAppointment) ? 'Rescheduling not allowed within 12 hours of appointment' : 'Reschedule appointment'"
+  [class.btn-disabled]="isCancelDisabled(nextAppointment)">
+  Reschedule
+</button>
             </div>
           </div>
 
