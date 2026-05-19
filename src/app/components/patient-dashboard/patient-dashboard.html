@@ -74,11 +74,12 @@
             </div>
             <div class="next-actions">
               <button
-  (click)="confirmCancel(nextAppointment)"
-  [disabled]="isCancelDisabled(nextAppointment)"
-  [title]="isCancelDisabled(nextAppointment) ? 'Cancellation not allowed within 12 hours of appointment' : 'Cancel appointment'"
-  [class.btn-disabled]="isCancelDisabled(nextAppointment)">
-  Cancel
+                (click)="confirmCancel(nextAppointment)"
+                [disabled]="isCancelDisabled(nextAppointment)"
+                [title]="isCancelDisabled(nextAppointment) ? 'Cancellation not allowed within 12 hours of appointment' : 'Cancel appointment'"
+                [class.btn-disabled]="isCancelDisabled(nextAppointment)">
+                Cancel
+              </button>
               <button class="mini-btn accent" (click)="openReschedule(nextAppointment)">Reschedule</button>
             </div>
           </div>
@@ -212,7 +213,14 @@
 
             @if (!appt.isPast && appt.status !== 'cancelled') {
               <div class="appt-card-actions">
-                <button class="text-btn cancel-btn" (click)="confirmCancel(appt)">Cancel</button>
+                <button
+                  class="text-btn cancel-btn"
+                  (click)="confirmCancel(appt)"
+                  [disabled]="isCancelDisabled(appt)"
+                  [title]="isCancelDisabled(appt) ? 'Cancellation not allowed within 12 hours of appointment' : 'Cancel appointment'"
+                  [class.btn-disabled]="isCancelDisabled(appt)">
+                  Cancel
+                </button>
                 <button class="text-btn" (click)="openReschedule(appt)">Reschedule</button>
               </div>
             }
