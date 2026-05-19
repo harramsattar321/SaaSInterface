@@ -542,7 +542,12 @@
   padding: 8px 12px;
   margin-top: 8px;
 }
-
+button:disabled,
+.btn-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
 .reschedule-slots-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
