@@ -3,14 +3,7 @@
 ------------------------------------------ */
 
 /* Background: light blue */
-.signup-wrapper {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #e8f1ff; /* soft blue */
-  padding: 20px;
-}
+
 
 :host {
   display: block;
