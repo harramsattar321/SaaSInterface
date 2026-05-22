@@ -17,7 +17,7 @@
   min-height: 100vh;
   position: relative;
 
-  background: url('/assets/bg.jfif') center/cover no-repeat;
+  background: url('bg.jfif') center/cover no-repeat;
 }
 
 :host::before {
