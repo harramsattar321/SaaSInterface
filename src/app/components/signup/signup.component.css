@@ -12,6 +12,27 @@
   padding: 20px;
 }
 
+:host {
+  display: block;
+  min-height: 100vh;
+  position: relative;
+
+  background: url('/assets/images/bg.jfif') center/cover no-repeat;
+}
+
+:host::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4); /* dark overlay */
+  backdrop-filter: blur(3px); /* blur effect */
+}
+
+.signup-container {
+  position: relative;
+  z-index: 1;
+}
+
 /* Main card: white */
 .signup-card {
   width: 100%;
