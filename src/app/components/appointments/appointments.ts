@@ -1,5 +1,3 @@
-// src/app/components/appointments/appointments.ts
-
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -49,9 +47,12 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
 
   patientId: string = '';
 
-  // ── Debounce timer for AI detection ──────────────────────
+  // ── Debounce timer & AI result cache ─────────────────────
   private detectDebounceTimer: any = null;
-  private readonly DETECT_DEBOUNCE_MS = 300; // ✅ CHANGE 1: reduced from 600 → 300
+  private readonly DETECT_DEBOUNCE_MS = 300;
+
+  // ✅ NEW: Cache AI results so the same phrase never hits the API twice
+  private aiResultCache = new Map<string, { isEmergency: boolean; category: string }>();
 
   private destroy$ = new Subject<void>();
 
@@ -241,7 +242,9 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
            this.availableSlots.length === 0;
   }
 
+  // ══════════════════════════════════════════════════════════
   // ── AI Emergency Detection ────────────────────────────────
+  // ══════════════════════════════════════════════════════════
 
   private readonly FAST_PRECHECK_PATTERNS: RegExp[] = [
     /\b(heart\s*attack|chest\s*pain|stroke|seizure|unconscious|overdose|poison|bleed|fracture|broken\s*bone|accident|crash|fell|emergency|urgent|can'?t\s*breath)\b/i,
@@ -251,8 +254,25 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
     return this.FAST_PRECHECK_PATTERNS.some(re => re.test(text));
   }
 
+  // ✅ NEW: Cache wrapper around the actual Groq call
   private async detectEmergencyWithAI(reason: string): Promise<{ isEmergency: boolean; category: string }> {
+    const cacheKey = reason.toLowerCase().trim();
 
+    // Return cached result if the same (or very similar) text was asked before
+    if (this.aiResultCache.has(cacheKey)) {
+      console.log('[AI Cache] Hit — skipping API call for:', cacheKey);
+      return this.aiResultCache.get(cacheKey)!;
+    }
+
+    const result = await this.callGroqAPI(reason);
+
+    // Cache the result to avoid repeat API calls
+    this.aiResultCache.set(cacheKey, result);
+    return result;
+  }
+
+  // ✅ Actual Groq API call — separated for clarity
+  private async callGroqAPI(reason: string): Promise<{ isEmergency: boolean; category: string }> {
     const GROQ_API_KEY = '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';
     const GROQ_MODEL   = 'llama-3.3-70b-versatile';
 
@@ -261,10 +281,13 @@ You are a medical triage assistant. Your only job is to read a patient's reason
 for booking an appointment and decide whether it describes a medical emergency.
 
 Rules:
-- Be tolerant of typos, misspellings, abbreviations, rough grammar, and mixed languages.
-  Examples: "accidant" = accident, "hert atack" = heart attack, "seziure" = seizure,
-  "i cant breth" = can't breathe, "fanted" = fainted, "bleding" = bleeding.
-- If the text plausibly describes an emergency, mark it as one — err on the side of caution.
+- Be tolerant of typos, misspellings, abbreviations, rough grammar, and MIXED LANGUAGES including Urdu/Hindi.
+- Examples of what you must detect:
+    English misspellings: "accidant", "hert atack", "hert atak", "seziure", "fanted", "bleding"
+    Urdu/Hindi phrases:   "mera dil dard kar raha", "sans nahi aa raha", "behosh ho gaya",
+                          "seena dard", "dil ka dora", "khoon aa raha", "bht tez dard",
+                          "girr gaya", "chakkar aa raha", "ulti ho rahi", "meri jaan jaa rahi"
+- If the text plausibly describes an emergency in ANY language, mark it as one — err on the side of caution.
 - Reply ONLY with a valid JSON object — no markdown fences, no explanation, nothing else.
 
 JSON schema (exactly two keys):
@@ -276,11 +299,17 @@ JSON schema (exactly two keys):
 category must be "" when isEmergency is false.
 
 Examples:
-  "accidant"          → {"isEmergency":true,"category":"accident"}
-  "hert atack"        → {"isEmergency":true,"category":"cardiac"}
-  "fanted in office"  → {"isEmergency":true,"category":"unconscious"}
-  "routine checkup"   → {"isEmergency":false,"category":""}
-  "mild headache"     → {"isEmergency":false,"category":""}
+  "accidant"                    → {"isEmergency":true,"category":"accident"}
+  "hert atak"                   → {"isEmergency":true,"category":"cardiac"}
+  "hert atak"                   → {"isEmergency":true,"category":"cardiac"}
+  "fanted in office"            → {"isEmergency":true,"category":"unconscious"}
+  "mera dil dard kar raha"      → {"isEmergency":true,"category":"cardiac"}
+  "sans nahi aa raha"           → {"isEmergency":true,"category":"other_emergency"}
+  "seena dard ho raha hai"      → {"isEmergency":true,"category":"cardiac"}
+  "behosh ho gaya"              → {"isEmergency":true,"category":"unconscious"}
+  "routine checkup"             → {"isEmergency":false,"category":""}
+  "mild headache"               → {"isEmergency":false,"category":""}
+  "aam checkup"                 → {"isEmergency":false,"category":""}
 `.trim();
 
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -310,7 +339,6 @@ Examples:
 
   // ── Reason input handler ──────────────────────────────────
 
-  // ✅ CHANGE 2: onReasonInput now has 3 layers — fast-precheck, local fuzzy, then AI
   onReasonInput(): void {
     const text = this.reason.trim();
 
@@ -324,7 +352,7 @@ Examples:
       return;
     }
 
-    // Layer 1: fast-precheck (instant, no API call)
+    // Layer 1: fast-precheck regex (instant)
     if (this.isObviousEmergency(text)) {
       this.zone.run(() => {
         this.isEmergency       = true;
@@ -333,10 +361,10 @@ Examples:
         this.isDetecting       = false;
         this.cdr.detectChanges();
       });
-      return; // ✅ no need to go further
+      return;
     }
 
-    // Layer 2: local fuzzy detection (instant, no API call)
+    // Layer 2: local fuzzy detection — keyword list + Levenshtein + Soundex + token pairs (instant)
     const localResult = this.detectEmergencyLocally(text);
     if (localResult.isEmergency) {
       this.zone.run(() => {
@@ -346,10 +374,10 @@ Examples:
         this.isDetecting       = false;
         this.cdr.detectChanges();
       });
-      return; // ✅ no need to call AI
+      return;
     }
 
-    // Layer 3: AI with 300ms debounce (only reaches here if layers 1 & 2 missed)
+    // Layer 3: AI with 300ms debounce (catches Urdu, complex sentences, anything local missed)
     this.zone.run(() => {
       this.isDetecting = true;
       this.cdr.detectChanges();
@@ -380,65 +408,121 @@ Examples:
     }, this.DETECT_DEBOUNCE_MS);
   }
 
+  // ══════════════════════════════════════════════════════════
   // ── Local keyword fallback ────────────────────────────────
+  // ══════════════════════════════════════════════════════════
 
   private readonly EMERGENCY_KEYWORDS: Record<string, string[]> = {
     cardiac: [
-      'heart attack','heart atack','hert attack','hert atack','hart attack',
-      'hert attak','hart attak','heart attak',
-      'chest pain','chest pian','chestpain','chest tightness','chest pressure',
+      // English — clean spellings
+      'heart attack','chest pain','chest tightness','chest pressure',
       'cardiac arrest','heart pain','heart failure','palpitations',
       'irregular heartbeat','angina','myocardial','left arm pain','jaw pain',
       'shortness of breath','short of breath','cant breathe',"can't breathe",
-      'cant breth',"can't breth",'difficulty breathing','breathing difficulty',
-      'breathless','i cant breath',
+      'difficulty breathing','breathing difficulty','breathless',
+      // English — misspellings (all single-t and double-t variants)
+      'heart atack','hert attack','hert atack','hart attack','hert attak',
+      'hart attak','heart attak','hert atak','heart atak','hart atak',
+      'hrt atak','hrt atack','chestpain','chest pian',
+      'cant breth',"can't breth",'i cant breath','i can t breathe',
+      // ✅ Urdu / Roman Urdu — cardiac
+      'dil dard','dil ka dard','seena dard','seene mein dard','seene ka dard',
+      'dil ka dora','heart ka dora','dil band','seena jkam','seena tight',
+      'dil tez','dil dhadak','mera dil dard','dil mein dard',
+      'saans nahi','sans nahi','sans rukk','saans rukk','saans band',
+      'sans lena mushkil','saans lena mushkil',
     ],
     accident: [
-      'accident','accidant','acident','accsident',
-      'car crash','road accident','vehicle accident','motorcycle accident',
+      // English — clean
+      'accident','car crash','road accident','vehicle accident','motorcycle accident',
       'bike accident','hit by car','fell','fall','fallen',
-      'fracture','fractured','fractur',
-      'broken bone','broken arm','broken leg','brokn',
+      'fracture','fractured','broken bone','broken arm','broken leg',
       'head injury','head trauma','skull','concussion',
-      'trauma','bleeding','bleding','bleading','blood loss',
-      'heavy bleeding','wound','deep cut','laceration','internal bleeding',
+      'trauma','bleeding','blood loss','heavy bleeding',
+      'wound','deep cut','laceration','internal bleeding',
+      // English — misspellings
+      'accidant','acident','accsident','fractur','brokn',
+      'bleding','bleading',
+      // ✅ Urdu / Roman Urdu — accident
+      'girr gaya','gir gaya','giir gaya','girr paya','hadsa',
+      'gaari accident','accident ho gaya','toot gaya','haddi tooti',
+      'khoon aa raha','khoon nikal raha','bahut khoon',
+      'chot lagi','badi chot','serious chot',
     ],
     stroke: [
-      'stroke','strok','paralysis','face drooping','face droping',
+      // English
+      'stroke','paralysis','face drooping','face droping',
       'arm weakness','leg weakness','speech problem','slurred speech',
       'slured speech','sudden headache','worst headache',
-      'vision loss','sudden vision','numbness','numness','confusion',
+      'vision loss','sudden vision','numbness','confusion',
       'loss of balance','brain attack',
+      // ✅ Urdu
+      'muh tirha','haath kamzor','taang kamzor','baat nahi ho rahi',
+      'aankhon se nahi dikh raha','ankhon se dhundla',
+      'brain attack','nass phati',
     ],
     unconscious: [
-      'unconscious','unconscous','fainted','fainting','fanted','faited',
-      'passed out','passd out','unresponsive','not responding',
-      'collapsed','colapsed','blackout','black out',
+      // English
+      'unconscious','fainted','fainting','passed out','unresponsive',
+      'not responding','collapsed','blackout','black out',
       'loss of consciousness','dizzy and fell','dizziness',
+      // English — misspellings
+      'unconscous','fanted','faited','passd out','colapsed',
+      // ✅ Urdu
+      'behosh','behosh ho gaya','behosh ho gayi','behoshi',
+      'girr gaya behosh','hosh nahi','hosh kho diya',
+      'girr pari','hosh nahi raha',
     ],
     severe_pain: [
-      'severe pain','sevear pain','extream pain','extreme pain',
-      'unbearable pain','sharp pain','stabbing pain','intense pain',
-      'excruciating','worst pain','severe abdominal pain','severe stomach pain',
-      'appendix',
+      // English
+      'severe pain','extreme pain','unbearable pain','sharp pain',
+      'stabbing pain','intense pain','excruciating','worst pain',
+      'severe abdominal pain','severe stomach pain','appendix',
+      // English — misspellings
+      'sevear pain','extream pain',
+      // ✅ Urdu
+      'bht tez dard','bahut tez dard','bohot zyada dard','bht zyada dard',
+      'dard bardaasht nahi','dard nahi jhel sakta','bohot dard',
+      'pet mein tez dard','sar mein tez dard',
     ],
     allergic: [
-      'allergic reaction','alergic reaction','anaphylaxis','anaphylactic',
+      // English
+      'allergic reaction','anaphylaxis','anaphylactic',
       'swollen throat','throat closing','hives','swelling face',
       'face swelling','epipen','bee sting','severe allergy',
+      // English — misspellings
+      'alergic reaction',
+      // ✅ Urdu
+      'gala band ho raha','gala suj gaya','chehra suj gaya',
+      'allergy reaction','bee ne kata','machar ka kat',
     ],
     poisoning: [
-      'overdose','ovrdose','poisoning','poising','poison',
-      'swallowed','ingested','drug overdose','medication overdose',
-      'toxic','chemical burn','burn','burnt','severe burn',
+      // English
+      'overdose','poisoning','swallowed','ingested',
+      'drug overdose','medication overdose','toxic','chemical burn',
+      'burn','burnt','severe burn',
+      // English — misspellings
+      'ovrdose','poising','poison',
+      // ✅ Urdu
+      'zeher kha liya','dawai bht zyada kha li','dawai overdose',
+      'jal gaya','jal gayi','aag lagi','andar kuch kha liya',
     ],
     other_emergency: [
-      'emergency','emergancy','emergenci','urgent','urgnt',
-      'critical','serious condition','life threatening','life-threatening',
-      'immediately','right now','help me',
+      // English
+      'emergency','urgent','critical','serious condition',
+      'life threatening','life-threatening','immediately','right now','help me',
       'vomiting blood','blood in vomit','coughing blood',
-      'seizure','seziure','siezure','convulsion','epilepsy attack',
+      'seizure','convulsion','epilepsy attack',
       'high fever','fever 40','fever 41','fever 42',
+      // English — misspellings
+      'emergancy','emergenci','urgnt','seziure','siezure',
+      // ✅ Urdu — general emergency
+      'emergency hai','madad karo','mujhe madad chahiye','jaldi aao',
+      'meri jaan jaa rahi','marne wala hoon','marne wali hoon',
+      'chakkar aa raha','ulti ho rahi','ulti nahi ruk rahi',
+      'meri tabiyat bht kharab','tabiyat theek nahi',
+      'tez bukhar','bukhaar 40','bukhaar 41',
+      'mrityu','jaan bachao',
     ],
   };
 
@@ -447,22 +531,50 @@ Examples:
 
     const lower = reason.toLowerCase();
 
+    // ── Step 1: Exact keyword substring match ─────────────
     for (const [category, keywords] of Object.entries(this.EMERGENCY_KEYWORDS)) {
       for (const kw of keywords) {
         if (lower.includes(kw)) return { isEmergency: true, category };
       }
     }
 
-    // Fuzzy pass: Levenshtein distance ≤ 2 against high-risk core words
+    // ── Step 2: Soundex phonetic match ────────────────────
+    // ✅ NEW: catches "hert"→"heart", "atak"→"attack", "seziure"→"seizure" etc.
+    const phoneticResult = this.detectByPhonetic(lower);
+    if (phoneticResult) {
+      return { isEmergency: true, category: phoneticResult };
+    }
+
+    // ── Step 3: Levenshtein on individual tokens ──────────
+    // ✅ FIXED: "attack" and "heart" added; adaptive threshold for longer words
     const HIGH_RISK_WORDS = [
-      'accident','fracture','seizure','fainted','unconscious',
-      'bleeding','overdose','poisoning','stroke','cardiac',
+      'accident', 'fracture', 'seizure',  'fainted',  'unconscious',
+      'bleeding', 'overdose', 'poisoning','stroke',   'cardiac',
+      'attack',   'heart',    'chest',    'emergency','breathe',
     ];
-    const inputTokens = lower.split(/\W+/).filter((t: string) => t.length > 3);
+    const inputTokens = lower.split(/\W+/).filter((t: string) => t.length > 2);
+
     for (const token of inputTokens) {
       for (const risk of HIGH_RISK_WORDS) {
-        if (this.levenshtein(token, risk) <= 2) {
+        // ✅ FIXED: adaptive threshold — longer words allow distance 3
+        const threshold = risk.length > 6 ? 3 : 2;
+        if (this.levenshtein(token, risk) <= threshold) {
           return { isEmergency: true, category: 'other_emergency' };
+        }
+      }
+    }
+
+    // ── Step 4: Token-pair join check ─────────────────────
+    // ✅ NEW: checks joined adjacent words e.g. "hert"+"atak" → "hertatak" ≈ "heartattack"
+    const HIGH_RISK_PHRASES = [
+      'heartattack', 'chestpain', 'heartfailure',
+      'headinjury', 'bloodloss', 'brainstroke',
+    ];
+    for (let i = 0; i < inputTokens.length - 1; i++) {
+      const pair = inputTokens[i] + inputTokens[i + 1];
+      for (const phrase of HIGH_RISK_PHRASES) {
+        if (this.levenshtein(pair, phrase) <= 3) {
+          return { isEmergency: true, category: 'cardiac' };
         }
       }
     }
@@ -470,7 +582,74 @@ Examples:
     return { isEmergency: false, category: '' };
   }
 
-  /** Levenshtein distance — O(n·m), fine for short medical words. */
+  // ══════════════════════════════════════════════════════════
+  // ── Soundex phonetic matching ─────────────────────────────
+  // ✅ NEW: "hert", "hart", "haart" all produce same Soundex as "heart"
+  // ══════════════════════════════════════════════════════════
+
+  private soundex(word: string): string {
+    if (!word) return '0000';
+    const w = word.toUpperCase();
+    const codeMap: Record<string, string> = {
+      B:'1', F:'1', P:'1', V:'1',
+      C:'2', G:'2', J:'2', K:'2', Q:'2', S:'2', X:'2', Z:'2',
+      D:'3', T:'3',
+      L:'4',
+      M:'5', N:'5',
+      R:'6',
+    };
+
+    let result = w[0];
+    let prev   = codeMap[w[0]] ?? '0';
+
+    for (let i = 1; i < w.length && result.length < 4; i++) {
+      const code = codeMap[w[i]] ?? '0';
+      if (code !== '0' && code !== prev) {
+        result += code;
+      }
+      prev = code;
+    }
+
+    return result.padEnd(4, '0');
+  }
+
+  // ✅ Maps Soundex codes → emergency category
+  // Pre-computed once; covers heart/hert/hart, attack/atak/atack, stroke/strok, etc.
+  private readonly EMERGENCY_SOUNDEX: Record<string, string> = {
+    // Cardiac words
+    'H630': 'cardiac',      // heart, hert, hart, haart
+    'A320': 'cardiac',      // attack, atak, atack, attak
+    'C323': 'cardiac',      // cardiac, cardiaq
+    'C152': 'cardiac',      // chest, chst
+    // Stroke
+    'S362': 'stroke',       // stroke, strok
+    'P642': 'stroke',       // paralysis
+    // Unconscious
+    'U525': 'unconscious',  // unconscious, unconscous
+    'F530': 'unconscious',  // fainted, fanted, faited
+    // Accident / trauma
+    'A235': 'accident',     // accident, accidant, acident
+    'F620': 'accident',     // fracture, fractur
+    'B453': 'accident',     // bleeding, bleding
+    // Seizure
+    'S260': 'other_emergency', // seizure, seziure, siezure
+    // Overdose
+    'O136': 'poisoning',    // overdose, ovrdose
+  };
+
+  private detectByPhonetic(text: string): string | null {
+    const tokens = text.split(/\W+/).filter((t: string) => t.length > 2);
+    for (const token of tokens) {
+      const code = this.soundex(token);
+      if (this.EMERGENCY_SOUNDEX[code]) {
+        return this.EMERGENCY_SOUNDEX[code];
+      }
+    }
+    return null;
+  }
+
+  // ── Levenshtein distance ──────────────────────────────────
+
   private levenshtein(a: string, b: string): number {
     const dp: number[][] = Array.from({ length: a.length + 1 }, (_: any, i: number) =>
       Array.from({ length: b.length + 1 }, (_2: any, j: number) => (i === 0 ? j : j === 0 ? i : 0))
@@ -489,16 +668,16 @@ Examples:
 
   get emergencyCategoryLabel(): string {
     const labels: Record<string, string> = {
-      cardiac:         ' Cardiac Emergency',
-      accident:        ' Accident / Trauma',
-      stroke:          ' Stroke',
-      unconscious:     ' Loss of Consciousness',
-      severe_pain:     ' Severe Pain',
-      allergic:        ' Allergic Reaction',
-      poisoning:       ' Poisoning / Overdose',
-      other_emergency: ' Medical Emergency',
+      cardiac:         '🫀 Cardiac Emergency',
+      accident:        '🚑 Accident / Trauma',
+      stroke:          '🧠 Stroke',
+      unconscious:     '😵 Loss of Consciousness',
+      severe_pain:     '⚡ Severe Pain',
+      allergic:        '🌿 Allergic Reaction',
+      poisoning:       '☠️ Poisoning / Overdose',
+      other_emergency: '🚨 Medical Emergency',
     };
-    return labels[this.emergencyCategory] || ' Emergency Detected';
+    return labels[this.emergencyCategory] || '🚨 Emergency Detected';
   }
 
   // ── Form validation ───────────────────────────────────────
@@ -515,14 +694,13 @@ Examples:
 
   // ── Submit ────────────────────────────────────────────────
 
-  // ✅ CHANGE 3: async submit — force-runs AI immediately if still detecting
   async submitAppointment(): Promise<void> {
     if (!this.reason || this.reason.trim().length === 0) {
-      this.bookingError = "Please enter a reason for the appointment.";
+      this.bookingError = 'Please enter a reason for the appointment.';
       return;
     }
 
-    // If debounce is still pending or AI is still running, cancel and run AI RIGHT NOW
+    // If debounce is still pending or AI is still running, cancel and force-run AI immediately
     if (this.isDetecting || this.detectDebounceTimer) {
       clearTimeout(this.detectDebounceTimer);
       this.detectDebounceTimer = null;
@@ -554,7 +732,7 @@ Examples:
       }
     }
 
-    // Now isEmergency is 100% correct before proceeding
+    // isEmergency is now 100% resolved before proceeding
     if (this.isEmergency) {
       this.submitEmergencyAppointment();
     } else {
