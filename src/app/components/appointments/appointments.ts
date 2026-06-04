@@ -51,7 +51,7 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
 
   // ── Debounce timer for AI detection ──────────────────────
   private detectDebounceTimer: any = null;
-  private readonly DETECT_DEBOUNCE_MS = 600;
+  private readonly DETECT_DEBOUNCE_MS = 300; // ✅ CHANGE 1: reduced from 600 → 300
 
   private destroy$ = new Subject<void>();
 
@@ -251,10 +251,6 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
     return this.FAST_PRECHECK_PATTERNS.some(re => re.test(text));
   }
 
-  /**
-   * Calls the Groq API to semantically analyse the reason text.
-   * Handles misspellings, synonyms, mixed languages, and rough grammar.
-   */
   private async detectEmergencyWithAI(reason: string): Promise<{ isEmergency: boolean; category: string }> {
 
     const GROQ_API_KEY = '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';
@@ -314,6 +310,7 @@ Examples:
 
   // ── Reason input handler ──────────────────────────────────
 
+  // ✅ CHANGE 2: onReasonInput now has 3 layers — fast-precheck, local fuzzy, then AI
   onReasonInput(): void {
     const text = this.reason.trim();
 
@@ -327,6 +324,7 @@ Examples:
       return;
     }
 
+    // Layer 1: fast-precheck (instant, no API call)
     if (this.isObviousEmergency(text)) {
       this.zone.run(() => {
         this.isEmergency       = true;
@@ -335,12 +333,27 @@ Examples:
         this.isDetecting       = false;
         this.cdr.detectChanges();
       });
-    } else {
+      return; // ✅ no need to go further
+    }
+
+    // Layer 2: local fuzzy detection (instant, no API call)
+    const localResult = this.detectEmergencyLocally(text);
+    if (localResult.isEmergency) {
       this.zone.run(() => {
-        this.isDetecting = true;
+        this.isEmergency       = localResult.isEmergency;
+        this.emergencyCategory = localResult.category;
+        this.selectedSlot      = '';
+        this.isDetecting       = false;
         this.cdr.detectChanges();
       });
+      return; // ✅ no need to call AI
     }
+
+    // Layer 3: AI with 300ms debounce (only reaches here if layers 1 & 2 missed)
+    this.zone.run(() => {
+      this.isDetecting = true;
+      this.cdr.detectChanges();
+    });
 
     if (this.detectDebounceTimer) clearTimeout(this.detectDebounceTimer);
     this.detectDebounceTimer = setTimeout(async () => {
@@ -367,12 +380,12 @@ Examples:
     }, this.DETECT_DEBOUNCE_MS);
   }
 
-  // ── Local keyword fallback (used only if API fails) ───────
-  //   Extended with common misspelling variants.
+  // ── Local keyword fallback ────────────────────────────────
 
   private readonly EMERGENCY_KEYWORDS: Record<string, string[]> = {
     cardiac: [
       'heart attack','heart atack','hert attack','hert atack','hart attack',
+      'hert attak','hart attak','heart attak',
       'chest pain','chest pian','chestpain','chest tightness','chest pressure',
       'cardiac arrest','heart pain','heart failure','palpitations',
       'irregular heartbeat','angina','myocardial','left arm pain','jaw pain',
@@ -496,17 +509,52 @@ Examples:
   }
 
   get isEmergencyFormValid(): boolean {
-    return !!this.selectedDoctor && !!this.patientId && this.isEmergency&&
+    return !!this.selectedDoctor && !!this.patientId && this.isEmergency &&
          this.reason.trim().length > 0;
   }
 
   // ── Submit ────────────────────────────────────────────────
 
-  submitAppointment(): void {
+  // ✅ CHANGE 3: async submit — force-runs AI immediately if still detecting
+  async submitAppointment(): Promise<void> {
     if (!this.reason || this.reason.trim().length === 0) {
-    this.bookingError = "Please enter a reason for the appointment.";
-    return;
-  }
+      this.bookingError = "Please enter a reason for the appointment.";
+      return;
+    }
+
+    // If debounce is still pending or AI is still running, cancel and run AI RIGHT NOW
+    if (this.isDetecting || this.detectDebounceTimer) {
+      clearTimeout(this.detectDebounceTimer);
+      this.detectDebounceTimer = null;
+
+      this.zone.run(() => {
+        this.isDetecting  = true;
+        this.bookingError = 'Analyzing your reason, please wait...';
+        this.cdr.detectChanges();
+      });
+
+      try {
+        const result = await this.detectEmergencyWithAI(this.reason.trim());
+        this.zone.run(() => {
+          this.isEmergency       = result.isEmergency;
+          this.emergencyCategory = result.category;
+          this.isDetecting       = false;
+          this.bookingError      = '';
+          this.cdr.detectChanges();
+        });
+      } catch {
+        const fallback = this.detectEmergencyLocally(this.reason.trim());
+        this.zone.run(() => {
+          this.isEmergency       = fallback.isEmergency;
+          this.emergencyCategory = fallback.category;
+          this.isDetecting       = false;
+          this.bookingError      = '';
+          this.cdr.detectChanges();
+        });
+      }
+    }
+
+    // Now isEmergency is 100% correct before proceeding
     if (this.isEmergency) {
       this.submitEmergencyAppointment();
     } else {
