@@ -54,7 +54,7 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
   // ── Groq config ───────────────────────────────────────────
-  private readonly GROQ_API_KEY = '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';
+  private readonly GROQ_API_KEY = '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';
   private readonly GROQ_MODEL   = 'llama-3.3-70b-versatile';
 
   private readonly GROQ_SYSTEM_PROMPT = `You are a medical triage assistant for a Pakistani hospital. Patients write their reason in English, Urdu, Roman Urdu, or a mix. Many patients are uneducated and write with short words, abbreviations, typos, missing letters, or repeated letters.
