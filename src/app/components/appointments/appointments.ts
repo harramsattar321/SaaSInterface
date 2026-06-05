@@ -54,7 +54,7 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
   // ── Groq config ───────────────────────────────────────────
-  private readonly GROQ_API_KEY = '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';
+  private readonly GROQ_API_KEY = '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';
   private readonly GROQ_MODEL   = 'llama-3.3-70b-versatile';
 
   private readonly GROQ_SYSTEM_PROMPT = `You are a medical triage assistant. A patient is booking a hospital appointment and has written a reason. Your job is to decide if that reason describes a GENUINE medical emergency requiring immediate attention.
