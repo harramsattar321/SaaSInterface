@@ -54,37 +54,109 @@ export class AppointmentBookingComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
   // ── Groq config ───────────────────────────────────────────
-  private readonly GROQ_API_KEY = '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';
+  private readonly GROQ_API_KEY = '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';
   private readonly GROQ_MODEL   = 'llama-3.3-70b-versatile';
 
-  private readonly GROQ_SYSTEM_PROMPT = `You are a medical triage assistant. A patient is booking a hospital appointment and has written a reason. Your job is to decide if that reason describes a GENUINE medical emergency requiring immediate attention.
+  private readonly GROQ_SYSTEM_PROMPT = `You are a medical triage assistant for a Pakistani hospital. Patients write their reason in English, Urdu, Roman Urdu, or a mix. Many patients are uneducated and write with short words, abbreviations, typos, missing letters, or repeated letters.
 
-IMPORTANT RULES:
-1. Read the FULL phrase as a whole — do not flag individual words in isolation.
-2. "hert checkup", "heart checkup", "dil checkup" = NOT an emergency. It is a routine visit.
-3. Only flag as emergency if the patient describes active, urgent, life-threatening symptoms RIGHT NOW.
-4. Be tolerant of typos, misspellings, and mixed Urdu/English (Roman Urdu).
+YOUR ONLY JOB: decide if the reason describes an active medical emergency happening RIGHT NOW.
 
-Emergency examples (isEmergency: true):
-- "heart attack", "hert atak", "mera dil dard kar raha hai" → cardiac
-- "chest pain", "seena dard", "saans nahi aa raha" → cardiac
-- "accident ho gaya", "accidant", "girr gaya khoon aa raha" → accident
-- "behosh ho gaya", "fainted", "unconscious" → unconscious
-- "stroke", "muh tirha ho gaya" → stroke
-- "bht tez dard", "severe pain", "unbearable pain" → severe_pain
-- "allergic reaction", "gala band ho raha" → allergic
-- "overdose", "zeher kha liya" → poisoning
-- "marne wala hoon", "jaan jaa rahi" → other_emergency
+════════════════════════════════════════
+URDU / ROMAN URDU DICTIONARY (memorize):
+════════════════════════════════════════
+dil       = heart
+bnd/band  = closed/stopped
+dard      = pain
+seena     = chest
+saans     = breath
+sans      = breath (short form)
+nahi      = not / cannot
+aa raha   = coming
+uth raha  = rising
+ruk gaya  = stopped
+tez       = fast / severe
+bht/bhut/bohot/boht = very
+zyada     = too much / a lot
+gir/girr  = fell down
+gaya/gayi = happened / went
+khoon     = blood
+nikal     = coming out
+behosh    = unconscious
+hosh      = consciousness
+chakkar   = dizziness
+ulti      = vomiting
+jaan      = life
+marna/mar = dying / die
+madad     = help
+hadsa     = accident
+haddi     = bone
+tooti     = broken
+bukhar    = fever
+tez bukhar = high fever
+gala      = throat
+suj       = swollen
+chehra    = face
+zeher     = poison
+jal       = burn
+pet       = stomach / abdomen
+sar       = head
 
-NOT emergency examples (isEmergency: false):
-- "checkup", "routine checkup", "hert checkup", "dil checkup", "general checkup"
-- "follow up", "follow up visit", "aam checkup"
-- "mild headache", "slight fever", "cough", "cold"
-- "blood test", "sugar checkup", "bp checkup"
-- "back pain" (chronic, not severe), "knee pain"
-- any checkup or routine visit — even if it mentions a body part
+════════════════════════════════════════
+EMERGENCY EXAMPLES (isEmergency: true):
+════════════════════════════════════════
+"dil bnd"            → dil=heart, bnd=stopped → cardiac EMERGENCY
+"dil band"           → heart stopped → cardiac EMERGENCY
+"dil band ho gaya"   → heart stopped → cardiac EMERGENCY
+"dil drd"            → dil=heart, drd=pain → cardiac EMERGENCY
+"seena drd"          → chest pain → cardiac EMERGENCY
+"sns nhi"            → saans nahi = can't breathe → cardiac EMERGENCY
+"sans nahi aa raha"  → can't breathe → cardiac EMERGENCY
+"bht tez drd"        → very severe pain → severe_pain EMERGENCY
+"gir gya khoon"      → fell + bleeding → accident EMERGENCY
+"behosh"             → unconscious → unconscious EMERGENCY
+"bhosh ho gya"       → behosh = unconscious → unconscious EMERGENCY
+"jaan ja rhi"        → life going = dying → other_emergency EMERGENCY
+"mar rha hoon"       → dying → other_emergency EMERGENCY
+"heart atttack"      → cardiac EMERGENCY
+"hert atak"          → cardiac EMERGENCY
+"chest pain"         → cardiac EMERGENCY
+"accident"           → accident EMERGENCY
+"khoon aa rha"       → bleeding → accident EMERGENCY
+"haddi toot"         → broken bone → accident EMERGENCY
+"zeher kha liya"     → poisoned → poisoning EMERGENCY
+"jal gya"            → burn → poisoning EMERGENCY
+"gala bnd"           → throat closed → allergic EMERGENCY
+"stroke"             → stroke EMERGENCY
+"seizure"            → other_emergency EMERGENCY
+"tez bukhar 104"     → very high fever → other_emergency EMERGENCY
 
-Reply ONLY with valid JSON. No markdown, no explanation.
+════════════════════════════════════════
+NOT EMERGENCY (isEmergency: false):
+════════════════════════════════════════
+"checkup"            → routine
+"hert checkup"       → heart checkup = routine
+"dil checkup"        → heart checkup = routine
+"aam checkup"        → general checkup = routine
+"follow up"          → routine
+"blood test"         → routine
+"sugar test"         → routine
+"bp check"           → routine
+"mild headache"      → routine
+"slight fever"       → routine
+"cough"              → routine
+"cold"               → routine
+"back pain"          → routine (unless described as severe/unbearable)
+"knee pain"          → routine
+
+════════════════════════════════════════
+CRITICAL RULES:
+════════════════════════════════════════
+1. Short/abbreviated Urdu = still valid. "dil bnd" means heart stopped. Treat it as emergency.
+2. Missing vowels are normal in Roman Urdu typing: "drd"=dard, "bnd"=band, "sns"=saans, "nhi"=nahi, "gya"=gaya, "rha"=raha, "ho"=ho.
+3. If in doubt and it COULD be an emergency — say true. Patient safety first.
+4. Only say false when it is clearly a routine visit.
+
+Reply ONLY with valid JSON. No markdown, no explanation, nothing else:
 {"isEmergency": true|false, "category": "cardiac"|"accident"|"stroke"|"unconscious"|"severe_pain"|"allergic"|"poisoning"|"other_emergency"|""}
 category must be "" when isEmergency is false.`;
 
@@ -185,8 +257,8 @@ category must be "" when isEmergency is false.`;
 
     if (!this.selectedDoctor || !this.selectedDate) return;
 
-    const dateObj  = new Date(this.selectedDate + 'T00:00:00');
-    const dayName  = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+    const dateObj     = new Date(this.selectedDate + 'T00:00:00');
+    const dayName     = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
     const slotsForDay = this.selectedDoctor.timeSlots.filter(ts => ts.day === dayName);
 
     if (slotsForDay.length === 0) {
@@ -279,8 +351,7 @@ category must be "" when isEmergency is false.`;
   onReasonInput(): void {
     const text = this.reason.trim();
 
-    // Reset if too short to analyse
-    if (text.length < 4) {
+    if (text.length < 3) {
       this.zone.run(() => {
         this.isEmergency       = false;
         this.emergencyCategory = '';
@@ -290,7 +361,6 @@ category must be "" when isEmergency is false.`;
       return;
     }
 
-    // Show spinner and debounce the API call
     this.zone.run(() => {
       this.isDetecting = true;
       this.cdr.detectChanges();
@@ -310,7 +380,6 @@ category must be "" when isEmergency is false.`;
         });
       } catch (err) {
         console.error('[Groq] Detection error:', err);
-        // On API failure: safe default — do NOT flag as emergency
         this.zone.run(() => {
           this.isEmergency       = false;
           this.emergencyCategory = '';
@@ -367,7 +436,6 @@ category must be "" when isEmergency is false.`;
 
     try {
       const parsed = JSON.parse(clean);
-      // Validate shape — safety net
       return {
         isEmergency: parsed.isEmergency === true,
         category:    typeof parsed.category === 'string' ? parsed.category : ''
@@ -419,7 +487,6 @@ category must be "" when isEmergency is false.`;
       return;
     }
 
-    // Cancel pending debounce — run AI right now so result is ready before booking
     clearTimeout(this.detectDebounceTimer);
     this.detectDebounceTimer = null;
 
@@ -554,10 +621,10 @@ category must be "" when isEmergency is false.`;
       this.cdr.detectChanges();
     });
 
-    const dateObj          = new Date(this.selectedDate + 'T00:00:00');
-    const [time, ampm]     = this.selectedSlot.split(' ');
-    const [h, m]           = time.split(':').map(Number);
-    let hours              = h;
+    const dateObj      = new Date(this.selectedDate + 'T00:00:00');
+    const [time, ampm] = this.selectedSlot.split(' ');
+    const [h, m]       = time.split(':').map(Number);
+    let hours          = h;
     if (ampm === 'PM' && h !== 12) hours += 12;
     if (ampm === 'AM' && h === 12) hours  = 0;
     dateObj.setHours(hours, m, 0, 0);
